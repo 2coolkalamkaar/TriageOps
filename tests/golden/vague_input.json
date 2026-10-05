@@ -1,0 +1,14 @@
+{
+  "name": "vague_input",
+  "description": "Vague input — no log data, only a general complaint",
+  "input": "my app is not working please help",
+  "expect": {
+    "classification.type": "Unknown",
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["Low"],
+    "must_mention": [],
+    "must_not_mention_in_root_cause": ["CrashLoopBackOff", "OOMKilled", "disk full", "port"],
+    "clarifying_questions_min": 1,
+    "command_warnings_max": 0
+  }
+}

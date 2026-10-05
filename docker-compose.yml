@@ -1,0 +1,35 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - TRIAGEOPS_MODEL=${TRIAGEOPS_MODEL:-gemini-2.0-flash}
+      - TRIAGEOPS_LOG_LEVEL=INFO
+    volumes:
+      - ./runbooks:/app/runbooks:ro
+      # Mount GCP credentials if using a service account file
+      # - ~/.config/gcloud:/home/triageops/.config/gcloud:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ui:
+    build: .
+    command: ["streamlit", "run", "src/triageops/ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      - TRIAGEOPS_API_URL=http://api:8000
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - TRIAGEOPS_MODEL=${TRIAGEOPS_MODEL:-gemini-2.0-flash}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

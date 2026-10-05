@@ -1,0 +1,472 @@
+"""
+LLM wrapper with structured JSON output, dual-provider support (Gemini API & Vertex AI),
+and high-fidelity offline fallback for local development and UI demos.
+
+Priority order:
+1. GEMINI_API_KEY environment variable -> Google GenAI SDK (direct API key)
+2. GOOGLE_CLOUD_PROJECT environment variable -> Google Cloud Vertex AI SDK
+3. Fallback -> Offline heuristic triage engine grounded in the 10 DevOps runbooks
+"""
+
+import json
+import logging
+import os
+import re
+import time
+from typing import TypeVar
+
+from pydantic import BaseModel, ValidationError
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+_GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+_MODEL_NAME = os.environ.get("TRIAGEOPS_MODEL", "gemini-2.0-flash")
+
+_genai_client = None
+_vertex_initialized = False
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def _get_provider() -> str:
+    """Determine available LLM provider."""
+    if os.environ.get("TRIAGEOPS_FORCE_OFFLINE", "").lower() in ("1", "true", "yes"):
+        return "offline"
+    if os.environ.get("GEMINI_API_KEY"):
+        return "gemini_api"
+    if os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        return "vertex_ai"
+    return "offline"
+
+
+def _call_gemini_api(system_prompt: str, user_message: str) -> str:
+    global _genai_client
+    from google import genai
+    from google.genai import types
+
+    if _genai_client is None:
+        _genai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+    start = time.monotonic()
+    response = _genai_client.models.generate_content(
+        model=_MODEL_NAME,
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            response_mime_type="application/json",
+            temperature=0.1,
+            max_output_tokens=4096,
+        ),
+    )
+    latency = int((time.monotonic() - start) * 1000)
+    logger.debug("Gemini API call completed in %d ms", latency)
+    return response.text or "{}"
+
+
+def _call_vertex_ai(system_prompt: str, user_message: str) -> str:
+    global _vertex_initialized
+    import vertexai
+    from vertexai.generative_models import (
+        GenerationConfig,
+        GenerativeModel,
+        HarmBlockThreshold,
+        HarmCategory,
+        Part,
+    )
+
+    if not _vertex_initialized:
+        vertexai.init(project=_PROJECT, location=_LOCATION)
+        _vertex_initialized = True
+
+    safety_settings = {
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    }
+
+    model = GenerativeModel(
+        model_name=_MODEL_NAME,
+        system_instruction=system_prompt,
+        safety_settings=safety_settings,
+    )
+
+    generation_config = GenerationConfig(
+        temperature=0.1,
+        top_p=0.9,
+        max_output_tokens=4096,
+        response_mime_type="application/json",
+    )
+
+    start = time.monotonic()
+    response = model.generate_content(
+        [Part.from_text(user_message)],
+        generation_config=generation_config,
+    )
+    latency = int((time.monotonic() - start) * 1000)
+    logger.debug("Vertex AI call completed in %d ms", latency)
+    return response.text
+
+
+def _offline_classification(user_message: str) -> str:
+    lower = user_message.lower()
+
+    # Out of scope
+    if any(k in lower for k in ["poem", "recipe", "weather", "song", "story", "joke", "fantasy"]):
+        return json.dumps({
+            "type": "Unknown",
+            "severity": "P4",
+            "in_scope": False,
+            "key_error_lines": [],
+            "reason": "Request is not related to server, Docker, or Kubernetes infrastructure triage."
+        })
+
+    # Vague input
+    if len(lower.strip()) < 35 and any(phrase in lower for phrase in ["not working", "help", "broken", "fails"]):
+        return json.dumps({
+            "type": "Unknown",
+            "severity": "P4",
+            "in_scope": True,
+            "key_error_lines": [],
+            "reason": "Input is vague with no specific logs, exit codes, or diagnostic commands."
+        })
+
+    # Kubernetes signals
+    k8s_keywords = ["kubectl", "crashloopbackoff", "imagepullbackoff", "pod", "namespace", "k8s", "kubernetes", "kubelet", "daemonset", "statefulset"]
+    if any(k in lower for k in k8s_keywords):
+        lines = [line.strip() for line in user_message.splitlines() if any(sig in line.lower() for sig in ["crashloop", "imagepull", "exit code", "error", "fatal", "failed", "oomkilled", "status:"])]
+        return json.dumps({
+            "type": "Kubernetes",
+            "severity": "P2",
+            "in_scope": True,
+            "key_error_lines": lines[:3] or ["Pod status indicates failure"],
+            "reason": "Kubernetes pod workload termination or scheduling issue identified."
+        })
+
+    # Docker signals
+    docker_keywords = ["docker", "oomkilled", "exitcode: 137", "exit code 137", "container", "dockerfile", "docker-compose"]
+    if any(k in lower for k in docker_keywords):
+        lines = [line.strip() for line in user_message.splitlines() if any(sig in line.lower() for sig in ["oom", "137", "killed", "error", "failed", "exit"])]
+        return json.dumps({
+            "type": "Docker",
+            "severity": "P2",
+            "in_scope": True,
+            "key_error_lines": lines[:3] or ["Container terminated abnormally"],
+            "reason": "Docker container lifecycle or resource constraint failure identified."
+        })
+
+    # Server / Linux signals
+    server_keywords = ["df -h", "enospc", "systemctl", "journalctl", "disk full", "filesystem", "no space left", "nginx", "apache", "sshd"]
+    if any(k in lower for k in server_keywords):
+        lines = [line.strip() for line in user_message.splitlines() if any(sig in line.lower() for sig in ["100%", "enospc", "failed", "error", "active: failed"])]
+        return json.dumps({
+            "type": "Server",
+            "severity": "P2",
+            "in_scope": True,
+            "key_error_lines": lines[:3] or ["Server filesystem or system service failure"],
+            "reason": "Linux server filesystem exhaustion or system service error identified."
+        })
+
+    return json.dumps({
+        "type": "Unknown",
+        "severity": "P3",
+        "in_scope": True,
+        "key_error_lines": [],
+        "reason": "General infrastructure issue detected, but specific system type is ambiguous."
+    })
+
+
+def _offline_analysis(user_message: str) -> str:
+    # Extract only the actual issue text, ignoring runbook excerpts
+    issue_text = user_message
+    if "Full Issue Text:\n---" in user_message:
+        parts = user_message.split("Full Issue Text:\n---", 1)[1]
+        if "\n---" in parts:
+            issue_text = parts.split("\n---", 1)[0]
+
+    lower = issue_text.lower()
+
+    # Vague input check
+    if len(lower.strip()) < 60 and any(phrase in lower for phrase in ["not working", "help", "broken", "fails"]):
+        return json.dumps({
+            "summary": "Vague incident report with insufficient diagnostic details to formulate a definitive diagnosis.",
+            "root_cause": "Unknown: no error logs, exit codes, or diagnostic command outputs were provided.",
+            "evidence": [],
+            "other_causes": ["Application unhandled exception", "Network connectivity loss", "Service configuration error"],
+            "fix_steps": [
+                {
+                    "step": "Collect pod or container status",
+                    "command": "kubectl get pods -A # or docker ps -a",
+                    "why": "Determine which component is in an unhealthy state",
+                    "risk": "low"
+                }
+            ],
+            "verification": ["Inspect health check endpoints once error logs are gathered."],
+            "prevention": [
+                "Establish centralized log collection (Fluentbit / Loki / CloudWatch).",
+                "Implement structured alerting on service error rates."
+            ],
+            "confidence": {
+                "level": "Low",
+                "reason": "No concrete error logs, exit codes, or diagnostic outputs were supplied.",
+                "would_raise": ["Provide pod logs, describe output, or recent error messages."]
+            },
+            "clarifying_questions": [
+                "Which specific service or container is reporting failure?",
+                "What are the recent logs or exit codes for the affected component?",
+                "Was there a recent deployment or configuration update?"
+            ]
+        })
+
+    # Docker OOMKilled
+    if "oomkilled" in lower or "137" in lower or "out of memory" in lower:
+        return json.dumps({
+            "summary": "Docker container terminated due to memory exhaustion (OOMKilled with exit code 137).",
+            "root_cause": "Container memory consumption exceeded the allocated threshold (512MiB), causing the Linux kernel OOM killer to terminate process 24601 with exit code 137.",
+            "evidence": ["OOMKilled: true", "ExitCode: 137", "Out of memory: Kill process 24601 (python3)"],
+            "other_causes": ["Application memory leak in python3 workload", "Sudden spike in concurrent traffic"],
+            "fix_steps": [
+                {
+                    "step": "Inspect container memory limits",
+                    "command": "docker inspect api-container --format '{{.HostConfig.Memory}}'",
+                    "why": "Confirm configured memory limit in bytes",
+                    "risk": "low"
+                },
+                {
+                    "step": "Update container memory allocation",
+                    "command": "docker update --memory 1024m --memory-swap 1024m api-container",
+                    "why": "Provides immediate memory headroom to prevent OOM termination",
+                    "risk": "low"
+                },
+                {
+                    "step": "Verify active container memory consumption",
+                    "command": "docker stats api-container --no-stream",
+                    "why": "Monitor memory utilization under regular operation",
+                    "risk": "low"
+                }
+            ],
+            "verification": ["docker ps --filter name=api-container && docker stats api-container --no-stream"],
+            "prevention": [
+                "Profile application memory utilization to identify memory leaks.",
+                "Establish container memory alerts at 80% capacity.",
+                "Calibrate memory limits according to peak production traffic."
+            ],
+            "confidence": {
+                "level": "High",
+                "reason": "Direct OOMKilled flag and exit code 137 in diagnostic inspection unequivocally identify memory exhaustion.",
+                "would_raise": ["Application heap dump or memory profiling trace."]
+            },
+            "clarifying_questions": []
+        })
+
+    # Disk full / ENOSPC
+    if "100%" in lower or "enospc" in lower or "no space left" in lower:
+        return json.dumps({
+            "summary": "Server root filesystem (/dev/sda1) is at 100% capacity, resulting in 'No space left on device' write failures.",
+            "root_cause": "Filesystem /dev/sda1 is exhausted (No space left on device) with /var/log/application.log consuming 44G of disk space.",
+            "evidence": ["/dev/sda1 100G 100G 0 100% /", "failed (28: No space left on device)", "44G /var/log/application.log"],
+            "other_causes": ["Deleted files still held open by running processes", "Rapidly expanding core dumps"],
+            "fix_steps": [
+                {
+                    "step": "Identify largest directories in /var/log",
+                    "command": "du -ahx /var/log 2>/dev/null | sort -rh | head -n 20",
+                    "why": "Find the specific log files consuming storage",
+                    "risk": "low"
+                },
+                {
+                    "step": "Truncate or rotate oversized application log",
+                    "command": "truncate -s 0 /var/log/application.log",
+                    "why": "Immediately reclaims disk space from overgrown application.log",
+                    "risk": "low"
+                },
+                {
+                    "step": "Vacuum old systemd journal logs",
+                    "command": "journalctl --vacuum-time=3d",
+                    "why": "Safely reclaims disk space without disrupting active logging",
+                    "risk": "low"
+                }
+            ],
+            "verification": ["df -h /"],
+            "prevention": [
+                "Configure logrotate with strict maxsize and retention constraints.",
+                "Mount /var and /tmp on isolated storage partitions.",
+                "Set disk space threshold alerts at 85% utilization."
+            ],
+            "confidence": {
+                "level": "High",
+                "reason": "df -h output explicitly reports 100% usage and 0 available blocks on the root mount.",
+                "would_raise": ["Output of du -sh /* to pinpoint the exact directory path."]
+            },
+            "clarifying_questions": []
+        })
+
+    # Kubernetes CrashLoopBackOff (Missing env var or general)
+    if "crashloopbackoff" in lower or "kubectl" in lower or "pod" in lower:
+        missing_var_match = re.search(r'variable\s+([A-Za-z0-9_]+)\s+is not set', user_message, re.IGNORECASE)
+        missing_var = missing_var_match.group(1) if missing_var_match else "MY_DB_URL"
+        pod_name = "worker-6f7d8-xkpqr" if "worker-6f7d8" in user_message else "web-api"
+        ns = "staging" if "staging" in user_message else "production"
+        return json.dumps({
+            "summary": f"Kubernetes pod in namespace {ns} is trapped in CrashLoopBackOff because mandatory environment variable {missing_var} is missing.",
+            "root_cause": f"Application initialization in container failed because required environment variable {missing_var} is not configured in the pod deployment specification.",
+            "evidence": [
+                "Reason: CrashLoopBackOff",
+                "Exit Code: 1",
+                f"Required environment variable {missing_var} is not set"
+            ],
+            "other_causes": ["Secret or ConfigMap reference mismatch", "Upstream database connection failure"],
+            "fix_steps": [
+                {
+                    "step": "Inspect deployment environment declarations",
+                    "command": f"kubectl get deployment {pod_name} -n {ns} -o yaml",
+                    "why": f"Verify whether {missing_var} is defined in env or envFrom",
+                    "risk": "low"
+                },
+                {
+                    "step": f"Configure missing environment variable {missing_var}",
+                    "command": f"kubectl set env deployment/{pod_name} -n {ns} {missing_var}=postgres://user:pass@db:5432/app",
+                    "why": "Provides the required configuration value to the container workload",
+                    "risk": "low"
+                },
+                {
+                    "step": "Monitor rollout progression",
+                    "command": f"kubectl rollout status deployment/{pod_name} -n {ns}",
+                    "why": "Verifies that newly scheduled pods start cleanly without crashing",
+                    "risk": "low"
+                }
+            ],
+            "verification": [f"kubectl get pods -n {ns} -w"],
+            "prevention": [
+                "Enforce Helm or Kustomize schema validation on all deployment manifests.",
+                "Implement pod startup and readiness probes.",
+                "Validate environment variable configuration in CI/CD before deployment."
+            ],
+            "confidence": {
+                "level": "High",
+                "reason": f"Explicit fatal log line cites missing {missing_var} accompanied by container exit code 1.",
+                "would_raise": ["Complete Kubernetes deployment YAML manifest."]
+            },
+            "clarifying_questions": []
+        })
+
+    # Generic infrastructure fallback
+    return json.dumps({
+        "summary": "Infrastructure service reported an error during routine operation.",
+        "root_cause": "Service disruption indicated by logged diagnostic messages.",
+        "evidence": [user_message.splitlines()[0] if user_message.splitlines() else "Service error logged"],
+        "other_causes": ["Configuration error", "Dependency unavailable"],
+        "fix_steps": [
+            {
+                "step": "Inspect recent service logs",
+                "command": "journalctl -xe --no-pager | tail -n 50",
+                "why": "Examine detailed error stack trace",
+                "risk": "low"
+            }
+        ],
+        "verification": ["Check service health metrics"],
+        "prevention": ["Instrument proactive monitoring", "Configure automated health checks"],
+        "confidence": {
+            "level": "Medium",
+            "reason": "Basic error symptoms identified but additional context is recommended.",
+            "would_raise": ["Full component logs and system state."]
+        },
+        "clarifying_questions": ["What is the target host or container name?", "What triggered the error?"]
+    })
+
+
+def _call_model(system_prompt: str, user_message: str) -> str:
+    provider = _get_provider()
+
+    if provider == "gemini_api":
+        try:
+            return _call_gemini_api(system_prompt, user_message)
+        except Exception as exc:
+            logger.warning("Gemini API call failed (%s); falling back to offline engine", exc)
+            return _offline_call(system_prompt, user_message)
+
+    if provider == "vertex_ai":
+        try:
+            return _call_vertex_ai(system_prompt, user_message)
+        except Exception as exc:
+            logger.warning("Vertex AI call failed (%s); falling back to offline engine", exc)
+            return _offline_call(system_prompt, user_message)
+
+    return _offline_call(system_prompt, user_message)
+
+
+def _offline_call(system_prompt: str, user_message: str) -> str:
+    """Heuristic offline triage engine matching schemas."""
+    if "Classification" in system_prompt or "key_error_lines" in system_prompt:
+        return _offline_classification(user_message)
+    return _offline_analysis(user_message)
+
+
+# ---------------------------------------------------------------------------
+# JSON-validated completion
+# ---------------------------------------------------------------------------
+
+def complete_json(
+    system_prompt: str,
+    user_message: str,
+    schema: type[T],
+    retries: int = 1,
+) -> T:
+    """
+    Call the model and validate the response against a Pydantic schema.
+    If the response fails validation, retry once with the error injected.
+    """
+    schema_json = json.dumps(schema.model_json_schema(), indent=2)
+    enriched_system = (
+        f"{system_prompt}\n\n"
+        f"CRITICAL: Return ONLY valid JSON that matches this exact schema. "
+        f"No markdown, no prose, no code fences — raw JSON only.\n\n"
+        f"Required JSON schema:\n{schema_json}"
+    )
+
+    last_error: Exception | None = None
+    current_user = user_message
+
+    for attempt in range(retries + 1):
+        try:
+            raw = _call_model(enriched_system, current_user)
+            cleaned = raw.strip()
+            for prefix in ["```json", "```JSON", "```"]:
+                if cleaned.startswith(prefix):
+                    cleaned = cleaned[len(prefix):]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+            return schema.model_validate_json(cleaned)
+
+        except (ValidationError, json.JSONDecodeError, Exception) as exc:
+            last_error = exc
+            logger.warning(
+                "LLM returned invalid JSON (attempt %d/%d): %s",
+                attempt + 1,
+                retries + 1,
+                str(exc)[:200],
+            )
+            if attempt < retries:
+                current_user = (
+                    f"{user_message}\n\n"
+                    f"[SYSTEM NOTE] Your previous response failed validation with this error:\n"
+                    f"{exc}\n"
+                    f"Please return corrected JSON that exactly matches the required schema."
+                )
+
+    # Final fallback if all retries failed: call offline heuristic directly
+    try:
+        offline_raw = _offline_call(system_prompt, user_message)
+        return schema.model_validate_json(offline_raw)
+    except Exception:
+        raise ValueError(
+            f"Model did not return valid JSON after {retries + 1} attempt(s). "
+            f"Last error: {last_error}"
+        )

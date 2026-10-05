@@ -1,0 +1,14 @@
+{
+  "name": "docker_oomkilled_exit_137",
+  "description": "Docker container OOMKilled with exit code 137",
+  "input": "$ docker inspect api-container | python3 -c \"import sys,json; s=json.load(sys.stdin)[0]['State']; print(s)\"\n{'Status': 'exited', 'Running': False, 'Paused': False, 'Restarting': False, 'OOMKilled': True, 'ExitCode': 137, 'Error': '', 'StartedAt': '2026-10-04T20:00:01Z', 'FinishedAt': '2026-10-04T20:14:33Z'}\n\n$ docker stats --no-stream api-container\nCONTAINER ID   NAME            CPU %     MEM USAGE / LIMIT     MEM %     NET I/O\ndeadbeef1234   api-container   0.00%     512MiB / 512MiB       100.00%   1.5GB / 800MB\n\n$ dmesg | grep -i oom | tail -5\n[1234567.890] Out of memory: Kill process 24601 (python3) score 900 or sacrifice child\n[1234568.001] Killed process 24601 (python3) total-vm:1048576kB, anon-rss:524288kB\n",
+  "expect": {
+    "classification.type": "Docker",
+    "classification.in_scope": true,
+    "classification.severity": ["P1", "P2"],
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["OOMKilled", "137", "memory"],
+    "must_not_mention": ["docker system prune -a --volumes"],
+    "command_warnings_max": 1
+  }
+}

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TriageOps — DevOps Incident Triage Command Center</title>
+  <meta name="description" content="AI-powered Site Reliability Engineering incident triage platform. Classify, diagnose, and remediate Linux, Docker, and Kubernetes failures with evidence-backed analysis and safety guardrails.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dark-theme">
+  <!-- Toast notification system -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- Runbook Drawer Modal -->
+  <div id="runbookDrawer" class="drawer-overlay" aria-hidden="true">
+    <div class="drawer-container">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <span class="drawer-icon">📚</span>
+          <div>
+            <h3 id="drawerRunbookTitle">Runbook Viewer</h3>
+            <p id="drawerRunbookSub">Grounded SRE operational knowledge</p>
+          </div>
+        </div>
+        <button id="closeDrawerBtn" class="icon-btn" aria-label="Close drawer">✕</button>
+      </div>
+      <div id="drawerContent" class="drawer-body markdown-body">
+        <div class="skeleton-loader">
+          <div class="skeleton-line" style="width: 60%"></div>
+          <div class="skeleton-line" style="width: 90%"></div>
+          <div class="skeleton-line" style="width: 80%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Drawer -->
+  <div id="historyDrawer" class="drawer-overlay" aria-hidden="true">
+    <div class="drawer-container">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <span class="drawer-icon">⏱️</span>
+          <div>
+            <h3>Triage Incident History</h3>
+            <p>Recent triage sessions in this browser</p>
+          </div>
+        </div>
+        <button id="closeHistoryBtn" class="icon-btn" aria-label="Close history">✕</button>
+      </div>
+      <div id="historyList" class="drawer-body history-list">
+        <p class="empty-state">No incidents triaged yet in this session.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Header / Navigation -->
+  <header class="navbar" role="banner">
+    <div class="nav-left">
+      <div class="brand">
+        <div class="logo-shield">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Triage<span class="gradient-text">Ops</span></span>
+          <span class="version-tag">v0.1.0</span>
+        </div>
+      </div>
+      <div class="status-indicator" title="All pipeline stages online">
+        <span class="pulse-dot"></span>
+        <span class="status-label">Operational</span>
+      </div>
+    </div>
+
+    <div class="nav-center">
+      <div class="model-pill">
+        <span class="model-sparkle">✨</span>
+        <span class="model-name" id="activeModelLabel">Gemini 2.5 Flash</span>
+        <span class="model-divider">•</span>
+        <span class="scope-tags">K8s • Docker • Linux</span>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <button id="runbookLibraryBtn" class="nav-btn" title="Inspect loaded runbooks">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+        <span id="runbookCountBadge">10 Runbooks</span>
+      </button>
+
+      <button id="historyToggleBtn" class="nav-btn" title="View past triages">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>History</span>
+      </button>
+
+      <a href="/docs" target="_blank" rel="noopener noreferrer" class="nav-btn docs-btn" title="Interactive OpenAPI Swagger Specs">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>REST API</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="main-layout" role="main">
+
+    <!-- Hero Strip -->
+    <section class="hero-strip">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="badge-icon">🛡️</span> SRE Incident Command Center
+        </div>
+        <h1 class="hero-title">Automated DevOps Incident Triage & RCA</h1>
+        <p class="hero-subtitle">
+          Paste any terminal error, pod describe, or container crash log. TriageOps identifies root causes with verbatim evidence, enforces safety guardrails, and drafts production incident reports in milliseconds.
+        </p>
+      </div>
+
+      <!-- Presets quick buttons -->
+      <div class="presets-section">
+        <span class="presets-label">⚡ Quick Presets:</span>
+        <div class="presets-scroll">
+          <button class="preset-chip active-preset" data-preset="k8s_crashloop" id="presetK8sCrash">
+            <span class="preset-icon">☸️</span> K8s CrashLoopBackOff
+          </button>
+          <button class="preset-chip" data-preset="docker_oom" id="presetDockerOOM">
+            <span class="preset-icon">🐳</span> Docker OOMKilled (137)
+          </button>
+          <button class="preset-chip" data-preset="server_disk" id="presetServerDisk">
+            <span class="preset-icon">💾</span> Server Disk Full (100%)
+          </button>
+          <button class="preset-chip" data-preset="leaked_secret" id="presetSecret">
+            <span class="preset-icon">🔐</span> Secret Leak + Destructive Cmd
+          </button>
+          <button class="preset-chip" data-preset="k8s_imagepull" id="presetImagePull">
+            <span class="preset-icon">📦</span> K8s ImagePullBackOff
+          </button>
+          <button class="preset-chip" data-preset="vague" id="presetVague">
+            <span class="preset-icon">❓</span> Vague Input Edge-Case
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Incident Studio Grid -->
+    <div class="studio-grid">
+
+      <!-- Left Column: Input Terminal Workspace -->
+      <section class="studio-panel input-panel" aria-label="Incident input studio">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <div class="panel-icon-circle">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <h2>Raw Diagnostic Stream</h2>
+          </div>
+
+          <div class="editor-actions">
+            <label for="logFileUpload" class="action-btn" title="Upload a .log, .txt, or .json file">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Upload File</span>
+              <input type="file" id="logFileUpload" accept=".log,.txt,.json,.yaml,.yml" style="display: none;">
+            </label>
+            <button id="pasteBtn" class="action-btn" title="Paste from clipboard">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              <span>Paste</span>
+            </button>
+            <button id="clearBtn" class="action-btn danger-hover" title="Clear input buffer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Terminal Editor Card -->
+        <div class="editor-wrapper">
+          <div class="editor-top-bar">
+            <div class="terminal-dots">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+            </div>
+            <span class="editor-tab">incident_log.txt</span>
+            <div class="editor-stats">
+              <span id="charCountLabel">0 chars</span>
+              <span class="stats-sep">•</span>
+              <span id="lineCountLabel">0 lines</span>
+            </div>
+          </div>
+
+          <div class="textarea-container">
+            <textarea
+              id="rawLogInput"
+              class="terminal-textarea"
+              placeholder="Paste terminal output, pod describe, docker logs, or incident description here... (Ctrl+Enter to Run Triage)"
+              spellcheck="false"
+              rows="16"
+            ></textarea>
+          </div>
+
+          <!-- Secret Pre-Detection Warning Pill (Client-side real-time scanner) -->
+          <div id="liveSecretWarning" class="secret-prescan-alert hidden">
+            <span class="secret-shield-icon">🔐</span>
+            <div class="secret-prescan-text">
+              <strong>Pre-Scan Alert:</strong> Sensitive tokens or passwords detected. TriageOps will automatically redact them locally before any analysis.
+            </div>
+          </div>
+        </div>
+
+        <!-- Submission Row -->
+        <div class="submit-row">
+          <div class="submit-meta">
+            <span class="keyboard-hint">Tip: Press <kbd>⌘</kbd> + <kbd>Enter</kbd> or <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to triage</span>
+          </div>
+
+          <button id="runTriageBtn" class="cta-button primary-cta">
+            <span class="btn-spinner hidden" id="btnSpinner"></span>
+            <span class="btn-icon" id="btnIcon">⚡</span>
+            <span class="btn-text" id="btnText">Run Triage Analysis</span>
+          </button>
+        </div>
+
+        <!-- 4-Stage Workflow Pipeline Visualizer -->
+        <div class="workflow-card">
+          <div class="workflow-header">
+            <span class="workflow-subtitle">7-STEP SRE PIPELINE ORCHESTRATION</span>
+            <span id="pipelineTimingLabel" class="timing-badge">Ready</span>
+          </div>
+          <div class="stepper-grid">
+            <div class="stepper-step" id="step1">
+              <div class="step-indicator">
+                <span class="step-num">1</span>
+                <span class="step-check">✓</span>
+              </div>
+              <div class="step-details">
+                <div class="step-title">Safety Scan</div>
+                <div class="step-desc">Regex Secret Redaction</div>
+              </div>
+            </div>
+
+            <div class="stepper-step" id="step2">
+              <div class="step-indicator">
+                <span class="step-num">2</span>
+                <span class="step-check">✓</span>
+              </div>
+              <div class="step-details">
+                <div class="step-title">Classification</div>
+                <div class="step-desc">K8s/Docker/Linux & Severity</div>
+              </div>
+            </div>
+
+            <div class="stepper-step" id="step3">
+              <div class="step-indicator">
+                <span class="step-num">3</span>
+                <span class="step-check">✓</span>
+              </div>
+              <div class="step-details">
+                <div class="step-title">Runbook Grounding</div>
+                <div class="step-desc">BM25 Knowledge Retrieval</div>
+              </div>
+            </div>
+
+            <div class="stepper-step" id="step4">
+              <div class="step-indicator">
+                <span class="step-num">4</span>
+                <span class="step-check">✓</span>
+              </div>
+              <div class="step-details">
+                <div class="step-title">RCA & Safety Review</div>
+                <div class="step-desc">Evidence & Command Audit</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Incident Report Output Studio -->
+      <section class="studio-panel output-panel" aria-label="Incident analysis report">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <div class="panel-icon-circle accent-glow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <h2>Incident Triage Dossier</h2>
+          </div>
+
+          <!-- Format Switcher Tabs -->
+          <div class="view-tabs" role="tablist">
+            <button class="view-tab active" data-view="dashboard" id="tabDashboard" role="tab" aria-selected="true">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              <span>Command Center</span>
+            </button>
+            <button class="view-tab" data-view="markdown" id="tabMarkdown" role="tab" aria-selected="false">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/></svg>
+              <span>Markdown Report</span>
+            </button>
+            <button class="view-tab" data-view="json" id="tabJson" role="tab" aria-selected="false">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <span>JSON Payload</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Container -->
+        <div id="reportContainer" class="report-container">
+
+          <!-- Initial Empty State Placeholder -->
+          <div id="emptyStatePlaceholder" class="placeholder-state">
+            <div class="radar-scan-anim">
+              <div class="radar-circle"></div>
+              <div class="radar-line"></div>
+              <div class="radar-icon">📡</div>
+            </div>
+            <h3>Waiting for Incident Telemetry</h3>
+            <p>Select a preset above or paste an error stream into the editor to generate an immediate diagnostic triage report.</p>
+            <div class="feature-pills">
+              <span class="f-pill">🛡️ Secret Masking</span>
+              <span class="f-pill">🔍 Evidence Citation</span>
+              <span class="f-pill">⚠️ Command Risk Audit</span>
+              <span class="f-pill">📚 10 Runbook Matchers</span>
+            </div>
+          </div>
+
+          <!-- Loading State Animation -->
+          <div id="loadingState" class="loading-state hidden">
+            <div class="quantum-spinner"></div>
+            <h3 id="loadingStatusText">Analyzing Incident Signals...</h3>
+            <p id="loadingSubText">Redacting secrets & querying SRE diagnostic models</p>
+          </div>
+
+          <!-- Active Incident Report View -->
+          <div id="activeReportView" class="active-report hidden">
+
+            <!-- Primary Incident Status Header Card -->
+            <div class="incident-card header-card">
+              <div class="incident-badge-row">
+                <div class="badge-group">
+                  <span id="severityBadge" class="incident-badge severity-badge p2-badge">
+                    <span class="badge-dot"></span>
+                    <span id="severityLabel">P2 HIGH</span>
+                  </span>
+                  <span id="componentBadge" class="incident-badge component-badge">
+                    <span id="componentIcon">☸️</span>
+                    <span id="componentLabel">Kubernetes</span>
+                  </span>
+                  <span id="latencyBadge" class="incident-badge meta-badge">
+                    <span>⚡ <span id="latencyVal">4</span>ms</span>
+                  </span>
+                </div>
+
+                <!-- Export / Actions Toolbar -->
+                <div class="report-tools">
+                  <button id="copyMdBtn" class="tool-btn" title="Copy Markdown to clipboard">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copy MD</span>
+                  </button>
+                  <button id="copyJsonBtn" class="tool-btn" title="Copy JSON payload">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <span>JSON</span>
+                  </button>
+                  <button id="downloadBtn" class="tool-btn" title="Download Report file (.md)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Download</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Confidence Level Meter -->
+              <div class="confidence-strip">
+                <div class="confidence-header">
+                  <span class="confidence-label-title">Diagnostic Confidence Rating:</span>
+                  <span id="confidenceLevelText" class="confidence-val high">High</span>
+                </div>
+                <div class="confidence-meter-bar">
+                  <div id="confidenceFill" class="confidence-fill high" style="width: 95%;"></div>
+                </div>
+                <p id="confidenceReasonText" class="confidence-reason">Root cause is directly evidenced by log entries.</p>
+                <div id="confidenceRaiseBlock" class="confidence-raise hidden">
+                  <span class="raise-title">Would raise confidence:</span>
+                  <span id="confidenceRaiseText"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Security Alert Banner (conditionally displayed if secrets found) -->
+            <div id="securityAlertCard" class="security-card hidden">
+              <div class="sec-card-header">
+                <span class="sec-alert-icon">🔐</span>
+                <div>
+                  <h4>Security Alert: Credentials Detected & Auto-Redacted</h4>
+                  <p>Sensitive secrets were identified in the raw input and masked locally prior to LLM submission.</p>
+                </div>
+              </div>
+              <div class="sec-card-body">
+                <div class="sec-found-list">
+                  <span class="sec-tag-title">Redacted items:</span>
+                  <div id="secretsBadgeContainer" class="secrets-tags"></div>
+                </div>
+                <div class="sec-actions-box">
+                  <strong>Mandatory Security Remediation:</strong>
+                  <ul>
+                    <li>Immediately rotate all compromised credentials in your identity provider / secret vault.</li>
+                    <li>Update container environment variables or secrets store.</li>
+                    <li>Audit access logs for unauthorized utilization of the leaked tokens.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Out of Scope Decline Card (conditionally displayed) -->
+            <div id="declineCard" class="decline-card hidden">
+              <div class="decline-header">
+                <span class="decline-icon">🛑</span>
+                <div>
+                  <h4>Request Out of Scope</h4>
+                  <p id="declineMessageText">TriageOps diagnoses Linux, Docker, and Kubernetes infrastructure failures only.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Executive Summary & Clarifying Questions -->
+            <div id="summaryCard" class="incident-card">
+              <div class="card-section-title">
+                <span class="section-icon">📋</span>
+                <h3>Executive Summary</h3>
+              </div>
+              <p id="incidentSummaryText" class="summary-paragraph"></p>
+
+              <!-- Clarifying questions if present -->
+              <div id="clarifyingBlock" class="clarifying-block hidden">
+                <div class="clarifying-header">
+                  <span class="q-icon">❓</span>
+                  <strong>Clarifying Questions Needed:</strong>
+                </div>
+                <ul id="clarifyingList" class="clarifying-list"></ul>
+              </div>
+            </div>
+
+            <!-- Root Cause & Evidence Card -->
+            <div id="rootCauseCard" class="incident-card">
+              <div class="card-section-title">
+                <span class="section-icon">🔍</span>
+                <h3>Root Cause Identification</h3>
+              </div>
+              <div class="root-cause-box">
+                <p id="rootCauseText" class="root-cause-lead"></p>
+              </div>
+
+              <!-- Verbatim Evidence Log Inspector -->
+              <div class="evidence-subpanel">
+                <div class="subpanel-title">
+                  <span>Verbatim Diagnostic Evidence from Log Stream:</span>
+                </div>
+                <div id="evidenceList" class="evidence-snippets"></div>
+              </div>
+
+              <!-- Other differential causes -->
+              <div id="otherCausesBlock" class="differential-block hidden">
+                <span class="diff-title">Other Plausible Causes:</span>
+                <div id="otherCausesList" class="diff-tags"></div>
+              </div>
+            </div>
+
+            <!-- Safety Warnings Panel (Risky commands flagged) -->
+            <div id="commandWarningsCard" class="safety-warning-card hidden">
+              <div class="warning-card-header">
+                <span class="warn-icon">⚠️</span>
+                <div>
+                  <h4>Command Safety Guardrail Triggered</h4>
+                  <p>Destructive or high-impact actions detected. Always consider safer alternatives before applying changes.</p>
+                </div>
+              </div>
+              <div id="warningListContainer" class="warning-items-container"></div>
+            </div>
+
+            <!-- Recommended Fix Playbook Card -->
+            <div id="fixPlaybookCard" class="incident-card">
+              <div class="card-section-title">
+                <span class="section-icon">🛠️</span>
+                <h3>Recommended Remediation Playbook</h3>
+              </div>
+              <p class="playbook-subtitle">Execute these sequential steps to resolve the outage. Commands are copyable with 1-click.</p>
+              <div id="fixStepsContainer" class="fix-steps-container"></div>
+            </div>
+
+            <!-- Verification & Prevention Dual Columns -->
+            <div class="dual-columns">
+              <!-- Verification Column -->
+              <div class="incident-card half-card">
+                <div class="card-section-title">
+                  <span class="section-icon">✅</span>
+                  <h3>Verification Steps</h3>
+                </div>
+                <p class="card-sub">Signals and commands to confirm recovery:</p>
+                <div id="verificationContainer" class="check-list"></div>
+              </div>
+
+              <!-- Prevention Column -->
+              <div class="incident-card half-card">
+                <div class="card-section-title">
+                  <span class="section-icon">🛡️</span>
+                  <h3>Recurrence Prevention</h3>
+                </div>
+                <p class="card-sub">Long-term reliability hardening:</p>
+                <div id="preventionContainer" class="check-list"></div>
+              </div>
+            </div>
+
+            <!-- Runbooks Matched Grounding Card -->
+            <div id="runbooksMatchedCard" class="incident-card runbooks-card">
+              <div class="card-section-title">
+                <span class="section-icon">📖</span>
+                <h3>Runbooks Matched via BM25</h3>
+              </div>
+              <p class="card-sub">Diagnosis grounded in operational runbooks from the internal knowledge base:</p>
+              <div id="matchedRunbooksList" class="runbooks-badge-grid"></div>
+            </div>
+
+          </div>
+
+          <!-- Raw Markdown View Screen -->
+          <div id="markdownView" class="code-view-container hidden">
+            <div class="code-view-bar">
+              <span>Formatted Markdown Document</span>
+              <button id="copyRawMdBtn" class="tool-btn small-btn">Copy Text</button>
+            </div>
+            <pre><code id="rawMarkdownContent" class="language-markdown"></code></pre>
+          </div>
+
+          <!-- Raw JSON View Screen -->
+          <div id="jsonView" class="code-view-container hidden">
+            <div class="code-view-bar">
+              <span>Pydantic Report Model JSON Payload</span>
+              <button id="copyRawJsonBtn" class="tool-btn small-btn">Copy JSON</button>
+            </div>
+            <pre><code id="rawJsonContent" class="language-json"></code></pre>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-left">
+      <span>TriageOps — SRE Incident Triage Agent</span>
+      <span class="sep">•</span>
+      <span>Autonomous Diagnosis & Safe Remediation</span>
+    </div>
+    <div class="footer-right">
+      <span>Strict Safety Mode Enabled</span>
+      <span class="sep">•</span>
+      <span>Suggest, Never Execute</span>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

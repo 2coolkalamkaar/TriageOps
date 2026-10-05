@@ -1,0 +1,14 @@
+{
+  "name": "k8s_crashloopbackoff_missing_env",
+  "description": "Kubernetes pod in CrashLoopBackOff due to missing environment variable",
+  "input": "Name:         web-api-7d9f8b4-xkpqr\nNamespace:    production\nStatus:       Running\n\nConditions:\n  Ready           False\n\nContainers:\n  web-api:\n    Image:         myregistry/web-api:v2.3.1\n    State:         Waiting\n      Reason:      CrashLoopBackOff\n    Last State:    Terminated\n      Reason:      Error\n      Exit Code:   1\n      Started:     Mon, 04 Oct 2026 22:10:05 +0000\n      Finished:    Mon, 04 Oct 2026 22:10:06 +0000\n    Ready:         False\n    Restart Count: 8\n    Limits:\n      memory: 256Mi\n    Requests:\n      memory: 128Mi\n    Environment:\n      NODE_ENV:  production\n\nEvents:\n  Warning  BackOff  2m   kubelet  Back-off restarting failed container\n\n--- Pod logs (--previous) ---\ntime=\"2026-10-04T22:10:05Z\" level=info msg=\"Starting web-api server\"\ntime=\"2026-10-04T22:10:05Z\" level=fatal msg=\"Required environment variable MY_DB_URL is not set\" error=\"env: MY_DB_URL not found\"\n",
+  "expect": {
+    "classification.type": "Kubernetes",
+    "classification.in_scope": true,
+    "classification.severity": ["P1", "P2"],
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["MY_DB_URL", "CrashLoopBackOff", "environment variable"],
+    "must_not_mention": ["kubectl delete namespace", "rm -rf"],
+    "command_warnings_max": 0
+  }
+}

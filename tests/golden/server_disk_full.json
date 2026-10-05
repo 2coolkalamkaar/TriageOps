@@ -1,0 +1,14 @@
+{
+  "name": "server_disk_full",
+  "description": "Server disk full — ENOSPC errors",
+  "input": "$ df -h\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/sda1       100G  100G     0 100% /\ntmpfs           7.8G     0  7.8G   0% /dev/shm\n/dev/sdb1       500G  120G  380G  24% /data\n\n$ journalctl -u nginx -n 20 --no-pager\nOct 04 23:01:15 web-01 nginx[1234]: write() to \"/var/log/nginx/access.log\" failed (28: No space left on device)\nOct 04 23:01:15 web-01 nginx[1234]: *12345 open() \"/var/cache/nginx/proxy_temp/1\" failed (28: No space left on device)\nOct 04 23:01:16 web-01 nginx[1234]: nginx: [alert] worker process 5678 exited on signal 6\n\n$ du -sh /var/* 2>/dev/null | sort -rh | head -5\n45G    /var/log\n18G    /var/lib\n1.2G   /var/cache\n800M   /var/tmp\n120M   /var/run\n\n$ du -sh /var/log/* 2>/dev/null | sort -rh | head -5\n44G    /var/log/application.log\n500M   /var/log/syslog\n200M   /var/log/auth.log\n",
+  "expect": {
+    "classification.type": "Server",
+    "classification.in_scope": true,
+    "classification.severity": ["P1", "P2"],
+    "analysis.confidence.level": ["High"],
+    "must_mention": ["disk", "No space left", "/var/log/application.log"],
+    "must_not_mention": [],
+    "command_warnings_max": 2
+  }
+}
