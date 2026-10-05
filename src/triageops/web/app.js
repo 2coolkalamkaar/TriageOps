@@ -108,6 +108,62 @@ document.addEventListener("DOMContentLoaded", () => {
   // Presets Data
   // --------------------------------------------------------------------------
   const PRESETS = {
+    k8s_real_cluster: `Name:                 payment-gateway-5cc8b7bb78-dwpd9
+Namespace:            production
+Priority Class Name:  production-critical
+Controlled By:        ReplicaSet/payment-gateway-5cc8b7bb78
+Node:                 sre-agent-cluster-worker/172.18.0.3
+
+Containers:
+  payment-gateway:
+    Image:         python:3.11-alpine
+    Command:
+      python3 -c
+      import time, sys
+      print("[INFO] Payment Gateway starting up...")
+      print("[INFO] Allocating memory buffer for payment processing batch...")
+      buf = bytearray(128 * 1024 * 1024)  # 128 MB allocation
+      time.sleep(3600)
+    State:          Waiting
+      Reason:       CrashLoopBackOff
+    Last State:     Terminated
+      Reason:       OOMKilled
+      Exit Code:    137
+      Started:      Mon, 05 Oct 2026 06:46:05 +0000
+      Finished:     Mon, 05 Oct 2026 06:46:12 +0000
+    Restart Count:  101
+    Limits:
+      cpu:     100m
+      memory:  32Mi
+    Requests:
+      cpu:     50m
+      memory:  16Mi
+
+Events:
+  Warning  BackOff     45s (x127 over 30m)  kubelet   Back-off restarting failed container payment-gateway in pod payment-gateway-5cc8b7bb78-dwpd9_production
+  Normal   Logging     10s                  kopf      [handler] production/payment-gateway-5cc8b7bb78-dwpd9 -> error_state=OOMKilled deployment=payment-gateway
+  Warning  OOMKilling  10s                  kernel    Memory cgroup out of memory: Killed process 4192 (python3) total-vm:189440kB, anon-rss:32768kB, file-rss:128kB`,
+
+    k8s_live_imagepull: `Name:         payment-service-78bb68978d-2ghhh
+Namespace:    production
+Node:         sre-agent-cluster-worker/172.18.0.3
+Controlled By: ReplicaSet/payment-service-78bb68978d
+
+Containers:
+  payment-app:
+    Image:   nginx:this-tag-does-not-exist-123
+    State:   Waiting
+      Reason: ImagePullBackOff
+    Ready:   False
+
+Events:
+  Normal   Scheduled  15m                    default-scheduler  Successfully assigned production/payment-service-78bb68978d-2ghhh to sre-agent-cluster-worker
+  Normal   Pulling    13m (x4 over 15m)      kubelet            Pulling image "nginx:this-tag-does-not-exist-123"
+  Warning  Failed     13m (x4 over 15m)      kubelet            Failed to pull image "nginx:this-tag-does-not-exist-123": rpc error: code = NotFound desc = failed to pull and unpack image: not found
+  Warning  Failed     13m (x4 over 15m)      kubelet            Error: ErrImagePull
+  Normal   BackOff    2m41s (x125 over 27m)  kubelet            Back-off pulling image "nginx:this-tag-does-not-exist-123"
+  Warning  Failed     2m41s (x125 over 27m)  kubelet            Error: ImagePullBackOff`,
+
     k8s_crashloop: `Name:         web-api-7d9f8b4-xkpqr
 Namespace:    production
 Status:       Running
@@ -216,7 +272,7 @@ Events:
   fetchRunbooksMeta();
 
   // Load first preset by default
-  rawLogInput.value = PRESETS.k8s_crashloop;
+  rawLogInput.value = PRESETS.k8s_real_cluster;
   updateEditorStats();
   checkClientSideSecrets();
 

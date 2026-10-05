@@ -123,6 +123,8 @@ async def log_requests(request: Request, call_next):
 # Routes
 # ---------------------------------------------------------------------------
 
+DOCS_FILE = Path(__file__).parent.parent.parent / "docs" / "TriageOps_Documentation.html"
+
 @app.get("/", include_in_schema=False)
 async def index():
     """Serve the TriageOps Command Center frontend."""
@@ -130,6 +132,14 @@ async def index():
     if index_file.exists():
         return FileResponse(str(index_file))
     return JSONResponse({"message": "TriageOps API is running. Visit /docs for OpenAPI specs."})
+
+
+@app.get("/documentation", include_in_schema=False)
+async def documentation():
+    """Serve the complete visual documentation HTML page."""
+    if DOCS_FILE.exists():
+        return FileResponse(str(DOCS_FILE))
+    return JSONResponse({"error": "Documentation file not found"}, status_code=404)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])

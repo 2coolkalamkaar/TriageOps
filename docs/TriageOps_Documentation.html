@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TriageOps — Complete Project Documentation</title>
+<meta name="description" content="Complete architecture, pipeline, file-by-file codebase reference and operations guide for TriageOps, the DevOps incident triage agent.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c14;--surface:#0f1728;--card:#131d31;--border:#253858;--text:#e2e8f0;--muted:#94a3b8;--dim:#64748b;--cyan:#38bdf8;--indigo:#818cf8;--green:#34d399;--amber:#fbbf24;--red:#f87171}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:Inter,sans-serif;background:var(--bg);color:var(--text);line-height:1.65;display:flex}
+nav{position:fixed;top:0;left:0;width:270px;height:100vh;background:var(--surface);border-right:1px solid var(--border);padding:22px 16px;overflow-y:auto}
+nav .brand{font-weight:800;font-size:20px;margin-bottom:4px}
+nav .brand span{background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+nav small{color:var(--dim);display:block;margin-bottom:18px}
+nav a{display:block;color:var(--muted);text-decoration:none;font-size:13px;padding:5px 10px;border-radius:6px;border-left:2px solid transparent}
+nav a:hover,nav a.active{color:#fff;background:var(--card);border-left-color:var(--cyan)}
+nav .grp{font-size:10px;letter-spacing:1px;color:var(--dim);margin:14px 10px 4px;text-transform:uppercase;font-weight:700}
+main{margin-left:270px;padding:40px 56px 80px;max-width:1150px;width:100%}
+.hero{padding:34px;border:1px solid var(--border);border-radius:16px;background:radial-gradient(circle at 80% 0%,rgba(99,102,241,.18),transparent 55%),var(--surface);margin-bottom:36px}
+.hero h1{font-size:34px;letter-spacing:-1px;font-weight:800}
+.hero p{color:var(--muted);margin-top:8px;max-width:760px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;border:1px solid var(--border);background:var(--card);color:var(--cyan)}
+section{margin-top:52px;scroll-margin-top:20px}
+h2{font-size:25px;letter-spacing:-.5px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+h3{font-size:17px;margin:24px 0 8px;color:#fff}
+p{color:#cbd5e1;margin-bottom:10px}
+ul,ol{margin:6px 0 12px 22px;color:#cbd5e1}
+li{margin-bottom:4px}
+code{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:rgba(56,189,248,.1);color:var(--cyan);padding:1px 6px;border-radius:4px}
+pre{background:#0b111e;border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:10px 0 16px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#cbd5e1;line-height:1.55}
+pre code{background:none;padding:0;color:inherit}
+table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border:1px solid var(--border);vertical-align:top}
+th{background:var(--card);color:#fff;font-weight:600}
+td{background:rgba(19,29,49,.5)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:12px 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.card h4{color:#fff;margin-bottom:6px;font-size:14.5px}
+.card p{font-size:13px;margin:0;color:var(--muted)}
+.callout{border-left:3px solid var(--cyan);background:rgba(56,189,248,.07);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+.callout.warn{border-color:var(--amber);background:rgba(251,191,36,.07)}
+.callout.good{border-color:var(--green);background:rgba(52,211,153,.07)}
+.callout b{color:#fff}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 8px;border-radius:99px;margin-right:4px}
+.t-code{background:rgba(52,211,153,.15);color:var(--green)}
+.t-llm{background:rgba(129,140,248,.18);color:var(--indigo)}
+.t-ui{background:rgba(56,189,248,.15);color:var(--cyan)}
+.t-ops{background:rgba(251,191,36,.15);color:var(--amber)}
+.mermaid{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin:14px 0 20px;text-align:center;overflow-x:auto}
+.file{border:1px solid var(--border);border-radius:12px;background:var(--surface);margin:14px 0;overflow:hidden}
+.file-h{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:6px}
+.file-h .path{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--cyan);font-weight:500}
+.file-b{padding:12px 16px 4px}
+.file-b p{font-size:13.5px}
+@media(max-width:900px){nav{display:none}main{margin-left:0;padding:24px}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand">Triage<span>Ops</span></div>
+  <small>Project Documentation · v0.1.0</small>
+  <div class="grp">Understand</div>
+  <a href="#overview">1. Overview</a>
+  <a href="#architecture">2. Architecture</a>
+  <a href="#pipeline">3. The 7-Step Pipeline</a>
+  <a href="#safety">4. Safety Design</a>
+  <a href="#llm">5. LLM Layer &amp; Providers</a>
+  <a href="#data">6. Data Models</a>
+  <div class="grp">Codebase</div>
+  <a href="#tree">7. Repository Map</a>
+  <a href="#files-core">8. Core Backend Files</a>
+  <a href="#files-iface">9. Interfaces (CLI/API/UI)</a>
+  <a href="#files-web">10. Web Command Center</a>
+  <a href="#files-data">11. Runbooks</a>
+  <a href="#files-test">12. Tests</a>
+  <a href="#files-ops">13. Config &amp; DevOps</a>
+  <div class="grp">Operate</div>
+  <a href="#api">14. REST API Reference</a>
+  <a href="#run">15. Running It</a>
+  <a href="#config">16. Configuration</a>
+  <a href="#extend">17. Extending</a>
+  <a href="#limits">18. Limitations &amp; Notes</a>
+</nav>
+
+<main>
+<div class="hero">
+  <h1>TriageOps — DevOps Incident Triage Agent</h1>
+  <p>Paste a server, Docker or Kubernetes error. TriageOps classifies it, finds the likely root cause with evidence from your input, suggests safe fix commands, rates its own confidence, and produces an incident report. It <b>suggests, never executes</b>.</p>
+  <div class="badges">
+    <span class="badge">Python 3.11+</span><span class="badge">FastAPI</span><span class="badge">Pydantic v2</span>
+    <span class="badge">Gemini / Vertex AI</span><span class="badge">BM25 retrieval</span><span class="badge">Typer CLI</span>
+    <span class="badge">Streamlit + Web UI</span><span class="badge">46 unit tests · 47 golden rules</span>
+  </div>
+</div>
+
+<!-- ======================= 1 OVERVIEW ======================= -->
+<section id="overview">
+<h2>1. Project Overview</h2>
+<p>TriageOps was designed for the Rival.io Forward Developer assessment (see the design document in the repo root). The assignment asked for an <b>Agent</b> (Task 1) and a multi-step <b>Workflow</b> (Task 2, bonus). This repo implements both as one codebase: the 7-step pipeline <i>is</i> the workflow, and the analyst step is the standalone troubleshooting agent.</p>
+
+<h3>The problem it solves</h3>
+<p>When infrastructure breaks, engineers lose time reading logs and guessing causes; juniors sometimes run destructive commands. TriageOps gives a fast, structured, safety-aware first response for three areas: <b>Linux servers, Docker, Kubernetes</b>. Anything else (billing, app business logic, poems) is politely declined.</p>
+
+<h3>Design principles</h3>
+<div class="grid">
+  <div class="card"><h4>1. Suggest, never execute</h4><p>No command is ever run. Humans decide.</p></div>
+  <div class="card"><h4>2. Evidence over guessing</h4><p>Root causes must cite lines from the input.</p></div>
+  <div class="card"><h4>3. Honest uncertainty</h4><p>High/Medium/Low confidence plus what info would raise it. Vague input → clarifying questions.</p></div>
+  <div class="card"><h4>4. Code wins over the model</h4><p>Secrets, scope gating and risky-command detection are deterministic code, not LLM judgement.</p></div>
+  <div class="card"><h4>5. Predictable output</h4><p>Every LLM reply is validated against a Pydantic schema.</p></div>
+  <div class="card"><h4>6. Small &amp; well-tested</h4><p>Unit tests need no API key; golden tests score end-to-end behaviour.</p></div>
+</div>
+
+<h3>What was built (summary)</h3>
+<table>
+<tr><th>Layer</th><th>What</th><th>Files</th></tr>
+<tr><td>Core engine</td><td>Pipeline, schemas, safety, LLM wrapper, prompts, retrieval, renderer</td><td><code>src/triageops/*.py</code></td></tr>
+<tr><td>Interfaces</td><td>CLI, REST API, Streamlit UI, production web UI</td><td><code>cli.py</code>, <code>api.py</code>, <code>ui/</code>, <code>web/</code></td></tr>
+<tr><td>Knowledge</td><td>10 markdown runbooks searched with BM25</td><td><code>runbooks/</code></td></tr>
+<tr><td>Quality</td><td>46 unit tests + 5 golden cases (47 scored rules)</td><td><code>tests/</code></td></tr>
+<tr><td>DevOps</td><td>Dockerfile, Compose, GitHub Actions CI, ruff config</td><td>repo root, <code>.github/</code></td></tr>
+</table>
+</section>
+
+<!-- ======================= 2 ARCHITECTURE ======================= -->
+<section id="architecture">
+<h2>2. System Architecture</h2>
+<p>All three user-facing interfaces are thin wrappers around a single function: <code>run_triage(raw_input) → Report</code>.</p>
+<div class="mermaid">
+flowchart TB
+  subgraph UI["Interfaces"]
+    CLI["CLI (cli.py)<br/>triageops file.log"]
+    WEB["Web Command Center<br/>web/index.html + app.js"]
+    ST["Streamlit UI<br/>ui/app.py"]
+    EXT["External clients<br/>curl / CI / scripts"]
+  end
+  API["FastAPI (api.py)<br/>/triage /runbooks /health"]
+  PIPE["pipeline.run_triage()"]
+  subgraph CORE["Core modules"]
+    SAFE["safety.py<br/>redact + review"]
+    PROMPT["prompts.py"]
+    LLM["llm.py<br/>provider router"]
+    RET["retrieval.py<br/>BM25"]
+    REND["render.py<br/>markdown / JSON"]
+    SCH["schemas.py<br/>Pydantic models"]
+  end
+  RB[("runbooks/*.md")]
+  subgraph PROV["LLM providers"]
+    G["Gemini API (GEMINI_API_KEY)"]
+    V["Vertex AI (GOOGLE_CLOUD_PROJECT)"]
+    O["Offline heuristic engine"]
+  end
+  CLI --> PIPE
+  ST --> PIPE
+  WEB -->|HTTP| API
+  EXT -->|HTTP| API
+  API --> PIPE
+  CLI --> REND
+  API --> REND
+  PIPE --> SAFE
+  PIPE --> PROMPT
+  PIPE --> LLM
+  PIPE --> RET
+  PIPE --> SCH
+  RET --> RB
+  LLM --> G
+  LLM --> V
+  LLM --> O
+</div>
+<div class="callout"><b>Key insight:</b> the CLI and Streamlit UI call the pipeline directly in-process; the web UI and external clients go through FastAPI. So a bug fixed in <code>pipeline.py</code> fixes every interface at once.</div>
+</section>
+
+<!-- ======================= 3 PIPELINE ======================= -->
+<section id="pipeline">
+<h2>3. The 7-Step Pipeline</h2>
+<p>Implemented in <code>pipeline.py → run_triage()</code>. Each step is tagged by whether <span class="tag t-code">CODE</span> or <span class="tag t-llm">LLM</span> does the work.</p>
+<div class="mermaid">
+flowchart TD
+  IN(["Raw input text"]) --> S1
+  S1["1. Safety pre-scan<br/>redact secrets"] --> E{"Empty?"}
+  E -- yes --> D1(["Declined report"])
+  E -- no --> TR["Trim to last 400 lines"]
+  TR --> S2["2. Classifier (LLM)<br/>type, severity, in_scope, key lines"]
+  S2 --> S3{"3. Scope gate<br/>in_scope?"}
+  S3 -- no --> D2(["Declined: out of scope"])
+  S3 -- yes --> S4["4. Runbook retrieval<br/>BM25 top-2"]
+  S4 --> S5["5. Analyst (LLM)<br/>root cause, fixes, confidence"]
+  S5 --> S6["6. Command review<br/>regex flags risky cmds, forces risk=high"]
+  S6 --> S7["7. Assemble Report"]
+  S7 --> OUT(["Report: JSON or Markdown"])
+</div>
+
+<table>
+<tr><th>#</th><th>Step</th><th>Who</th><th>What happens</th><th>Output</th></tr>
+<tr><td>1</td><td>Safety pre-scan</td><td><span class="tag t-code">CODE</span></td><td><code>redact_secrets()</code> replaces tokens, passwords, keys, URL credentials with <code>[REDACTED]</code> <b>before any model call</b>.</td><td>clean text + list of secret types</td></tr>
+<tr><td>–</td><td>Empty / long input</td><td><span class="tag t-code">CODE</span></td><td>Blank input returns a declined report. Inputs over 400 lines are trimmed to the last 400 (with a note).</td><td>—</td></tr>
+<tr><td>2</td><td>Classifier</td><td><span class="tag t-llm">LLM</span></td><td>Decides Server/Docker/Kubernetes/Mixed/Unknown, severity P1–P4, in_scope, ≤5 verbatim key error lines.</td><td><code>Classification</code></td></tr>
+<tr><td>3</td><td>Scope gate</td><td><span class="tag t-code">CODE</span></td><td>If <code>in_scope</code> is false, the pipeline stops and returns a polite decline.</td><td>declined <code>Report</code></td></tr>
+<tr><td>4</td><td>Runbook retrieval</td><td><span class="tag t-code">CODE</span></td><td>Query = type + key error lines; BM25 returns top-2 runbooks with score &gt; 0.</td><td>runbook text + names</td></tr>
+<tr><td>5</td><td>Analyst</td><td><span class="tag t-llm">LLM</span></td><td>Gets input, classification and runbooks; returns root cause, evidence, fix steps, verification, prevention, confidence, clarifying questions.</td><td><code>Analysis</code></td></tr>
+<tr><td>6</td><td>Command review</td><td><span class="tag t-code">CODE</span></td><td>Checks fix commands <b>and</b> any quoted commands the user mentioned (e.g. <code>'rm -rf /etc/kubernetes'</code>) against 15 risky patterns; sets matching fix steps to <code>risk="high"</code>.</td><td><code>CommandWarning[]</code></td></tr>
+<tr><td>7</td><td>Assembly</td><td><span class="tag t-code">CODE</span></td><td>Builds the final <code>Report</code> with latency and runbooks used.</td><td><code>Report</code></td></tr>
+</table>
+
+<h3>Example: the "risky + secret" golden case</h3>
+<pre><code>Input: Kubernetes CrashLoopBackOff + DATABASE_URL=postgres://admin:***@db + API_KEY=ghp_... 
+       "Should I run 'kubectl delete namespace staging --force'? or 'rm -rf /etc/kubernetes'?"
+
+Step 1  → 3 secrets redacted: GitHub token, Credentials in URL, Generic secret assignment
+Step 2  → Kubernetes / P2 / in_scope
+Step 4  → k8s-crashloopbackoff.md, docker-port-conflict.md
+Step 6  → 3 warnings: kubectl delete namespace, --force, rm -rf   (with safer alternatives)
+Report  → Security Notes section: rotate credentials immediately</code></pre>
+</section>
+
+<!-- ======================= 4 SAFETY ======================= -->
+<section id="safety">
+<h2>4. Safety Design</h2>
+<div class="mermaid">
+sequenceDiagram
+  participant U as User input
+  participant S as safety.py
+  participant L as LLM provider
+  participant R as Report
+  U->>S: raw text (may contain secrets)
+  S->>S: redact_secrets() — regex, 10 patterns
+  S->>L: only redacted text leaves the process
+  L-->>S: fix_steps (model's own risk labels)
+  S->>S: review_commands() — 15 risky patterns
+  S->>R: warnings + risk forced to "high" (code overrides model)
+</div>
+
+<h3>Secret patterns redacted (10)</h3>
+<p>AWS access key, AWS secret key, private key blocks, GitHub tokens, GCP service-account JSON, Bearer tokens, credentials in URLs, generic <code>password/token/api_key=</code> assignments, 32+ char hex strings, 40+ char base64 strings. A connection-string pattern (<code>postgres://</code>, <code>redis://</code>…) is <i>warn-only</i> because it is too noisy to auto-redact.</p>
+
+<h3>Risky command patterns (15) — each carries a reason and a safer alternative</h3>
+<table>
+<tr><th>Pattern</th><th>Why risky</th><th>Safer alternative offered</th></tr>
+<tr><td><code>rm -rf</code></td><td>Irreversible delete</td><td>interactive <code>rm -ri</code> / trash first</td></tr>
+<tr><td><code>kubectl delete ns|pv|pvc|node</code></td><td>Mass resource/data loss</td><td>inspect with get/describe; cordon + drain</td></tr>
+<tr><td><code>docker system prune</code>, <code>docker rm/rmi -f</code></td><td>Removes volumes/in-use items</td><td>filtered prune; stop then remove</td></tr>
+<tr><td><code>--force</code></td><td>Skips safety checks</td><td>dry-run / describe first</td></tr>
+<tr><td><code>kill -9</code></td><td>No graceful shutdown</td><td><code>kill -15</code> first</td></tr>
+<tr><td><code>chmod -R 777</code></td><td>Opens permissions to all</td><td>least privilege (755)</td></tr>
+<tr><td><code>mkfs</code>, <code>dd if=</code></td><td>Destroys disk data</td><td>verify device with <code>lsblk</code>, back up</td></tr>
+<tr><td><code>DROP TABLE/DATABASE/SCHEMA</code></td><td>Permanent DB loss</td><td>transaction + ROLLBACK test, backup</td></tr>
+<tr><td><code>kubectl exec … -- sh</code></td><td>Shell in prod container</td><td><code>kubectl debug</code> on a copy</td></tr>
+<tr><td><code>systemctl stop|disable nginx/sshd/docker/kubelet</code></td><td>Stops critical service</td><td>check status/logs first</td></tr>
+</table>
+<div class="callout warn"><b>Honest limitation:</b> both detectors are regex heuristics. They catch common patterns, not every possible secret or destructive command. This is stated in the README and in <code>safety.py</code>.</div>
+</section>
+
+<!-- ======================= 5 LLM ======================= -->
+<section id="llm">
+<h2>5. LLM Layer &amp; Providers</h2>
+<p>All model interaction lives in <code>llm.py</code>. The rest of the code only calls <code>complete_json(system_prompt, user_message, schema)</code>.</p>
+<div class="mermaid">
+flowchart TD
+  CJ["complete_json(prompt, msg, Schema)"] --> ENR["Append JSON schema to system prompt"]
+  ENR --> CM["_call_model()"]
+  CM --> P{"_get_provider()"}
+  P -- "TRIAGEOPS_FORCE_OFFLINE=1" --> OFF["Offline heuristic engine"]
+  P -- "GEMINI_API_KEY set" --> GA["Gemini API (google-genai)"]
+  P -- "GOOGLE_CLOUD_PROJECT set" --> VX["Vertex AI"]
+  P -- "nothing set" --> OFF
+  GA -- "exception" --> OFF
+  VX -- "exception" --> OFF
+  GA --> VAL
+  VX --> VAL
+  OFF --> VAL["Strip ``` fences, validate with Pydantic"]
+  VAL -- valid --> RET(["Typed object"])
+  VAL -- invalid --> RT["Retry once, inject validation error"]
+  RT --> VAL
+  RT -- "still invalid" --> FB["Final fallback: offline engine"]
+</div>
+<h3>Offline heuristic engine</h3>
+<p>Keyword/regex-based classifier and analyst that return schema-valid JSON for the demo scenarios (CrashLoopBackOff, OOMKilled/137, disk full, vague input, out-of-scope). It exists so the app, tests and UI work without any cloud credentials, and acts as a fallback if a provider call fails.</p>
+<div class="callout warn"><b>Be aware:</b> offline output is canned for known scenarios and is <b>not</b> real reasoning. For genuine diagnosis of arbitrary input, set <code>GEMINI_API_KEY</code> or <code>GOOGLE_CLOUD_PROJECT</code>. The golden-test pass (47/47) was obtained using the offline engine; it has not been validated against a live model yet.</div>
+</section>
+
+<!-- ======================= 6 DATA ======================= -->
+<section id="data">
+<h2>6. Data Models</h2>
+<p>Defined in <code>schemas.py</code>. Steps never pass free text between each other — always typed objects.</p>
+<div class="mermaid">
+classDiagram
+  class Report{
+    Classification classification
+    Analysis analysis?
+    list secrets_found
+    list command_warnings
+    bool declined
+    str decline_message?
+    list runbooks_used
+    int latency_ms?
+  }
+  class Classification{
+    IssueType type
+    SeverityLevel severity
+    bool in_scope
+    list key_error_lines (max 5)
+    str reason
+  }
+  class Analysis{
+    str summary
+    str root_cause
+    list evidence
+    list other_causes
+    list fix_steps
+    list verification
+    list prevention
+    Confidence confidence
+    list clarifying_questions
+  }
+  class FixStep{
+    str step
+    str command?
+    str why
+    RiskLevel risk
+  }
+  class Confidence{
+    ConfidenceLevel level
+    str reason
+    list would_raise
+  }
+  class CommandWarning{
+    str command
+    str reason
+    str safer_alternative?
+  }
+  Report --> Classification
+  Report --> Analysis
+  Report --> CommandWarning
+  Analysis --> FixStep
+  Analysis --> Confidence
+</div>
+<table>
+<tr><th>Type</th><th>Allowed values</th></tr>
+<tr><td>IssueType</td><td>Server · Docker · Kubernetes · Mixed · Unknown</td></tr>
+<tr><td>SeverityLevel</td><td>P1 (prod down) · P2 (major) · P3 (partial) · P4 (minor)</td></tr>
+<tr><td>ConfidenceLevel</td><td>High · Medium · Low</td></tr>
+<tr><td>RiskLevel</td><td>low · medium · high</td></tr>
+</table>
+</section>
+
+<!-- ======================= 7 TREE ======================= -->
+<section id="tree">
+<h2>7. Repository Map</h2>
+<pre><code>Triageops/
+├── src/triageops/                 ← the Python package
+│   ├── __init__.py                  version + logging bootstrap
+│   ├── pipeline.py                  7-step orchestrator (run_triage)
+│   ├── schemas.py                   Pydantic models
+│   ├── safety.py                    secret redaction + risky-command review
+│   ├── llm.py                       provider router + JSON validation + offline engine
+│   ├── prompts.py                   classifier &amp; analyst prompts
+│   ├── retrieval.py                 BM25 runbook search
+│   ├── render.py                    Report → markdown / JSON
+│   ├── logging_config.py            console + JSON log formatters
+│   ├── cli.py                       Typer CLI: triageops / serve / ui
+│   ├── api.py                       FastAPI app + serves web UI
+│   ├── ui/
+│   │   ├── __init__.py              earlier Streamlit draft (see notes)
+│   │   └── app.py                   Streamlit app (the one the CLI launches)
+│   └── web/
+│       ├── index.html               Command Center page
+│       ├── style.css                design system
+│       └── app.js                   client logic
+├── runbooks/                      ← 10 markdown knowledge files
+├── tests/
+│   ├── test_safety.py  test_schemas.py  test_pipeline_mock.py
+│   ├── run_golden.py                golden harness
+│   └── golden/                      5 JSON scenarios
+├── conftest.py                    pytest bootstrap
+├── pyproject.toml                 deps, scripts, ruff/pytest config
+├── Dockerfile  docker-compose.yml
+├── .github/workflows/ci.yml
+├── .env.example  .gitignore
+├── README.md
+├── docs/TriageOps_Documentation.html   ← this file
+├── TriageOps — … (Rival.io Assessment).md   original design doc
+└── TriageOps Standalone — … Build Guide.md  platform-independent build guide</code></pre>
+</section>
+
+<!-- ======================= 8 CORE FILES ======================= -->
+<section id="files-core">
+<h2>8. Core Backend Files (<code>src/triageops/</code>)</h2>
+
+<div class="file"><div class="file-h"><span class="path">pipeline.py</span><span><span class="tag t-code">CORE</span></span></div><div class="file-b">
+<p>The heart of the project. <code>run_triage(raw_input)</code> executes the 7 steps and returns a <code>Report</code>. At import time it creates a module-level <code>_runbooks</code> singleton (loaded once). Runbook directory resolution order: <code>TRIAGEOPS_RUNBOOKS_DIR</code> env var → <code>&lt;project&gt;/runbooks</code> → <code>./runbooks</code>.</p>
+<p>Notable details: trims to last 400 lines; step 6 merges model fix-commands with commands the user quoted in backticks/quotes so destructive suggestions in the <i>question</i> are caught too.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">schemas.py</span><span><span class="tag t-code">CORE</span></span></div><div class="file-b">
+<p>All Pydantic v2 models and literal types (see section 6). The JSON schema of these models is injected into the LLM prompt so the model knows the exact shape.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">safety.py</span><span><span class="tag t-code">CORE</span></span></div><div class="file-b">
+<p>Pure-code safety. Exposes <code>redact_secrets(text) → (clean, found)</code>, <code>review_commands(list) → CommandWarning[]</code>, <code>is_risky_command(cmd) → bool</code>. Data lives in <code>SECRET_PATTERNS</code>, <code>WARN_ONLY_PATTERNS</code>, <code>RISKY_COMMANDS</code> — add new rules by appending to these.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">llm.py</span><span><span class="tag t-llm">LLM</span></span></div><div class="file-b">
+<p>Provider router (Gemini API → Vertex AI → offline), JSON-validated completion with one self-correcting retry, markdown-fence stripping, and the offline heuristic engine (<code>_offline_classification</code>, <code>_offline_analysis</code>). Env: <code>GEMINI_API_KEY</code>, <code>GOOGLE_CLOUD_PROJECT</code>, <code>GOOGLE_CLOUD_LOCATION</code>, <code>TRIAGEOPS_MODEL</code>, <code>TRIAGEOPS_FORCE_OFFLINE</code>. Temperature is 0.1 for stable structured output.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">prompts.py</span><span><span class="tag t-llm">LLM</span></span></div><div class="file-b">
+<p>Holds <code>CLASSIFIER_SYSTEM</code> and <code>ANALYST_SYSTEM</code> prompts plus <code>build_classifier_user()</code> / <code>build_analyst_user()</code> message builders. Kept separate so prompts can be tuned without touching logic. Analyst rules enforce: never invent log lines, never claim to run commands, flag destructive commands, don't reconstruct <code>[REDACTED]</code> values, Low confidence + questions for vague input, trust evidence over runbooks.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">retrieval.py</span><span><span class="tag t-code">CORE</span></span></div><div class="file-b">
+<p>Class <code>Runbooks</code>: loads <code>*.md</code> files, tokenises with a simple regex, builds a <code>BM25Okapi</code> index (library <code>rank-bm25</code>). Methods: <code>search(query,k)</code>, <code>get_runbook(name)</code>, <code>list_runbooks()</code>, <code>len()</code>. Degrades gracefully (returns <code>[]</code>) if the library or folder is missing. Design choice: BM25 first; upgrade to embeddings only if golden tests show misses.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">render.py</span><span><span class="tag t-code">CORE</span></span></div><div class="file-b">
+<p>Deterministic formatting, no LLM. <code>to_markdown(report)</code> builds the postmortem-style document (classification table, summary, root cause + evidence, fix steps with risk badges, safety warnings, verification, prevention, confidence, runbooks, security notes). <code>to_json(report)</code> dumps the model. Declined reports render a short "Out of Scope" page.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">logging_config.py</span><span><span class="tag t-ops">OPS</span></span></div><div class="file-b">
+<p>Console (human-readable) and JSON log formatters, level controlled by <code>TRIAGEOPS_LOG_LEVEL</code>. Called from <code>__init__.py</code> on import.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">__init__.py</span><span><span class="tag t-ops">OPS</span></span></div><div class="file-b">
+<p>Defines <code>__version__ = "0.1.0"</code> and sets up default logging.</p></div></div>
+</section>
+
+<!-- ======================= 9 INTERFACES ======================= -->
+<section id="files-iface">
+<h2>9. Interfaces (CLI · API · Streamlit)</h2>
+
+<div class="file"><div class="file-h"><span class="path">cli.py</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>Typer + Rich app. Three commands:</p>
+<ul>
+<li><code>triageops [file] [--json] [--quiet]</code> — reads a file, piped stdin, or interactive paste; prints a rendered markdown report.</li>
+<li><code>triageops serve [--host --port --reload]</code> — starts uvicorn with the API and web UI.</li>
+<li><code>triageops ui [--port]</code> — launches the Streamlit app.</li>
+</ul>
+<p>Exit codes: 1 file not found, 2 pipeline error.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">api.py</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>FastAPI app. Serves the web UI at <code>/</code>, static assets at <code>/static</code>, Swagger at <code>/docs</code>. Has request-latency logging middleware and open CORS (tighten for production). Endpoints in section 14.</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">ui/app.py</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>Streamlit interface: sidebar with five example inputs, text area, metric row (type, severity, confidence, secrets, time), expandable security and command-warning panels, markdown/JSON tabs, download buttons. Calls <code>run_triage</code> directly (not via the API).</p></div></div>
+
+<div class="file"><div class="file-h"><span class="path">ui/__init__.py</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>An earlier draft of the Streamlit app accidentally saved inside the package init. It is redundant with <code>ui/app.py</code> and can be cleaned up (see section 18).</p></div></div>
+</section>
+
+<!-- ======================= 10 WEB ======================= -->
+<section id="files-web">
+<h2>10. Web Command Center (<code>src/triageops/web/</code>)</h2>
+<p>A dependency-free single-page UI (vanilla HTML/CSS/JS) served by FastAPI. Dark glassmorphic design.</p>
+<div class="file"><div class="file-h"><span class="path">web/index.html</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>Layout: sticky navbar (status, model pill, runbook/history/API buttons) → hero + 6 preset chips → two-column studio. Left: terminal-style editor with upload/paste/clear, live secret pre-scan banner, run button, 4-stage progress stepper. Right: report area with three tabs (Command Center cards, Markdown, JSON), empty/loading states, and slide-in drawers for runbooks and history.</p></div></div>
+<div class="file"><div class="file-h"><span class="path">web/style.css</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>Design tokens (CSS variables), severity badges (P1 glow red … P4 grey), confidence meter, stepper states, evidence/code blocks, warning cards, drawers, toasts, responsive breakpoints.</p></div></div>
+<div class="file"><div class="file-h"><span class="path">web/app.js</span><span><span class="tag t-ui">UI</span></span></div><div class="file-b">
+<p>Client logic: preset loading, <code>Ctrl/⌘+Enter</code> to run, real-time client-side secret scan, stepper animation, two parallel <code>POST /triage</code> calls (json + markdown), report rendering (escaped with <code>escapeHtml</code>), copy/download tools, runbook drawer (<code>GET /runbooks/{name}</code>), and history persisted to <code>localStorage</code> (last 20).</p></div></div>
+<div class="callout warn"><b>Note:</b> the stepper animation is cosmetic (timed), because the API returns a single response — it does not reflect true per-step progress. Also, the browser UI has not yet been verified visually in a real browser (the automated browser tool failed to start); API and static routes were verified over HTTP.</div>
+</section>
+
+<!-- ======================= 11 RUNBOOKS ======================= -->
+<section id="files-data">
+<h2>11. Runbooks (<code>runbooks/</code>)</h2>
+<p>Operational knowledge in markdown, indexed by BM25 and given to the analyst as grounding. Each has: what it means, common causes, signals, diagnosis steps, fix patterns, prevention.</p>
+<table>
+<tr><th>File</th><th>Covers</th></tr>
+<tr><td><code>k8s-crashloopbackoff.md</code></td><td>Restart loops, exit-code table, missing env/ConfigMap, probes</td></tr>
+<tr><td><code>k8s-imagepullbackoff.md</code></td><td>Registry auth (401), wrong tag, pull secrets</td></tr>
+<tr><td><code>k8s-oomkilled.md</code></td><td>Pod memory limits, requests vs limits</td></tr>
+<tr><td><code>docker-exit-137-oomkilled.md</code></td><td>Container OOM, <code>docker inspect</code>, <code>docker update --memory</code></td></tr>
+<tr><td><code>docker-port-conflict.md</code></td><td>"port already allocated", finding the holder</td></tr>
+<tr><td><code>docker-build-failure.md</code></td><td>Dockerfile / CI build errors</td></tr>
+<tr><td><code>server-disk-full.md</code></td><td>ENOSPC, big logs, journal vacuum, deleted-but-open files</td></tr>
+<tr><td><code>server-memory-exhaustion.md</code></td><td>Host OOM killer, swap, top consumers</td></tr>
+<tr><td><code>server-service-crash.md</code></td><td>systemd failures, <code>journalctl</code> workflow</td></tr>
+<tr><td><code>server-ssh-refused.md</code></td><td>sshd down, firewall, config errors</td></tr>
+</table>
+<p>To add knowledge, drop a new <code>.md</code> file in <code>runbooks/</code> and restart — it is indexed automatically.</p>
+</section>
+
+<!-- ======================= 12 TESTS ======================= -->
+<section id="files-test">
+<h2>12. Tests (<code>tests/</code>)</h2>
+<div class="mermaid">
+flowchart LR
+  subgraph FAST["Fast, no API key (CI)"]
+    A["test_safety.py<br/>24 tests"]
+    B["test_schemas.py<br/>16 tests"]
+    C["test_pipeline_mock.py<br/>6 tests (mocked LLM)"]
+  end
+  subgraph SLOW["Scenario scoring"]
+    D["run_golden.py"] --> E["golden/*.json<br/>5 cases · 47 rules"]
+  end
+</div>
+<table>
+<tr><th>File</th><th>Purpose</th></tr>
+<tr><td><code>test_safety.py</code></td><td>Each secret pattern, clean text unchanged, every risky command class, safer alternatives present.</td></tr>
+<tr><td><code>test_schemas.py</code></td><td>Valid/invalid enums, optional fields, JSON round-trip.</td></tr>
+<tr><td><code>test_pipeline_mock.py</code></td><td>Patches <code>_call_model</code>: scope-gate decline, redaction before LLM, risky command override, empty input.</td></tr>
+<tr><td><code>run_golden.py</code></td><td>Runs the full pipeline on each golden case and scores rules: type, severity, in_scope, confidence, <code>must_mention</code>, <code>must_not_mention</code>, warnings min/max, secrets, clarifying questions.</td></tr>
+<tr><td><code>golden/*.json</code></td><td>K8s CrashLoop (missing env var), Docker OOMKilled 137, server disk full, vague input, risky+secret.</td></tr>
+<tr><td><code>conftest.py</code> (root)</td><td>pytest bootstrap so the <code>src</code> package imports cleanly.</td></tr>
+</table>
+<pre><code>pytest tests/                # 46 pass
+python tests/run_golden.py   # 47/47 rules (currently via offline engine)</code></pre>
+</section>
+
+<!-- ======================= 13 OPS ======================= -->
+<section id="files-ops">
+<h2>13. Configuration &amp; DevOps Files</h2>
+<table>
+<tr><th>File</th><th>Role</th></tr>
+<tr><td><code>pyproject.toml</code></td><td>Package metadata, dependencies, <code>triageops</code> console script, setuptools src-layout, ruff (line 120, ignore E501) and pytest (<code>asyncio_mode=auto</code>) config. Dev extras: pytest, ruff, mypy.</td></tr>
+<tr><td><code>Dockerfile</code></td><td><code>python:3.11-slim</code>, non-root user, installs package, default entrypoint serves the API.</td></tr>
+<tr><td><code>docker-compose.yml</code></td><td>Two services: <code>api</code> (port 8000, healthcheck on <code>/health</code>, runbooks mounted read-only) and <code>ui</code> (Streamlit, port 8501).</td></tr>
+<tr><td><code>.github/workflows/ci.yml</code></td><td>Jobs: ruff lint, unit tests on Python 3.11 &amp; 3.12, Docker build. Golden tests excluded (need keys).</td></tr>
+<tr><td><code>.env.example</code></td><td>Template of environment variables.</td></tr>
+<tr><td><code>.gitignore</code></td><td>Ignores venv, caches, secrets/keys, logs.</td></tr>
+<tr><td><code>README.md</code></td><td>Short quick-start and limitations.</td></tr>
+<tr><td>Two <code>.md</code> design docs</td><td>Original assessment plan and a platform-independent build guide — background reading.</td></tr>
+</table>
+</section>
+
+<!-- ======================= 14 API ======================= -->
+<section id="api">
+<h2>14. REST API Reference</h2>
+<table>
+<tr><th>Method</th><th>Path</th><th>Description</th></tr>
+<tr><td>GET</td><td><code>/</code></td><td>Web Command Center HTML</td></tr>
+<tr><td>GET</td><td><code>/health</code></td><td><code>{status, version, runbooks_loaded}</code></td></tr>
+<tr><td>GET</td><td><code>/runbooks</code></td><td>List runbook names + count</td></tr>
+<tr><td>GET</td><td><code>/runbooks/{name}</code></td><td>Raw markdown of one runbook (404 if missing)</td></tr>
+<tr><td>POST</td><td><code>/triage</code></td><td>Run the pipeline</td></tr>
+<tr><td>GET</td><td><code>/docs</code>, <code>/redoc</code></td><td>OpenAPI docs</td></tr>
+</table>
+<pre><code>curl -X POST http://localhost:8000/triage \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Status: CrashLoopBackOff\nExit Code: 1","format":"json"}'
+
+# request:  text (1–50,000 chars), format = "json" | "markdown"
+# response: {"success":true,"format":"json","data":{...Report...},"latency_ms":4}</code></pre>
+<div class="mermaid">
+sequenceDiagram
+  participant B as Browser
+  participant A as FastAPI
+  participant P as run_triage
+  B->>A: POST /triage (json)
+  B->>A: POST /triage (markdown)
+  A->>P: run pipeline (each call)
+  P-->>A: Report
+  A-->>B: JSON report
+  A-->>B: Markdown report
+  Note over B,A: The UI currently runs the pipeline twice per click
+</div>
+</section>
+
+<!-- ======================= 15 RUN ======================= -->
+<section id="run">
+<h2>15. Running It</h2>
+<pre><code># setup
+cd /home/rahul/Triageops
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -e ".[dev]"          # if resolver is slow: pip install the deps individually
+
+# 1) Web Command Center + API
+triageops serve --port 8000       # → http://localhost:8000
+
+# 2) Streamlit
+triageops ui --port 8501
+
+# 3) CLI
+kubectl describe pod web-api | triageops
+triageops server.log --json
+
+# 4) Docker
+docker compose up --build
+
+# quality gates
+ruff check src tests
+pytest tests/
+python tests/run_golden.py</code></pre>
+</section>
+
+<!-- ======================= 16 CONFIG ======================= -->
+<section id="config">
+<h2>16. Configuration Reference</h2>
+<table>
+<tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+<tr><td><code>GEMINI_API_KEY</code></td><td>—</td><td>Use the Gemini API directly (highest priority)</td></tr>
+<tr><td><code>GOOGLE_CLOUD_PROJECT</code></td><td>—</td><td>Use Vertex AI (needs gcloud auth)</td></tr>
+<tr><td><code>GOOGLE_CLOUD_LOCATION</code></td><td>us-central1</td><td>Vertex region</td></tr>
+<tr><td><code>TRIAGEOPS_MODEL</code></td><td>gemini-2.0-flash</td><td>Model name for either provider</td></tr>
+<tr><td><code>TRIAGEOPS_FORCE_OFFLINE</code></td><td>unset</td><td>Force the offline heuristic engine</td></tr>
+<tr><td><code>TRIAGEOPS_RUNBOOKS_DIR</code></td><td>auto</td><td>Custom runbooks folder</td></tr>
+<tr><td><code>TRIAGEOPS_LOG_LEVEL</code></td><td>INFO</td><td>Logging verbosity</td></tr>
+</table>
+<p>Note: provider choice is read when a call is made, but <code>_PROJECT</code>/<code>_MODEL_NAME</code> are read at import time — restart after changing them.</p>
+</section>
+
+<!-- ======================= 17 EXTEND ======================= -->
+<section id="extend">
+<h2>17. How to Extend</h2>
+<div class="grid">
+<div class="card"><h4>Add a runbook</h4><p>Drop <code>topic.md</code> into <code>runbooks/</code>. Auto-indexed.</p></div>
+<div class="card"><h4>Add a risky command</h4><p>Append <code>(regex, reason, safer)</code> to <code>RISKY_COMMANDS</code> in safety.py + a test.</p></div>
+<div class="card"><h4>Add a secret pattern</h4><p>Add to <code>SECRET_PATTERNS</code>; add a test in test_safety.py.</p></div>
+<div class="card"><h4>Tune the model</h4><p>Edit prompts in prompts.py, then run the golden harness with a live key.</p></div>
+<div class="card"><h4>Swap provider</h4><p>Change only <code>_call_model</code> in llm.py.</p></div>
+<div class="card"><h4>Add a golden case</h4><p>New JSON in <code>tests/golden/</code> with an <code>expect</code> block.</p></div>
+</div>
+</section>
+
+<!-- ======================= 18 LIMITS ======================= -->
+<section id="limits">
+<h2>18. Limitations &amp; Known Notes</h2>
+<div class="callout good"><b>Solid:</b> pipeline structure, schemas, deterministic safety layer, tests, API, packaging, CI definition.</div>
+<ul>
+<li><b>Golden tests were run on the offline engine only.</b> Run <code>python tests/run_golden.py</code> with a real key to measure true model quality.</li>
+<li><b>Offline engine is canned</b> for known scenarios; not general reasoning. Its sample fix command for missing env vars contains a placeholder credential-style URL — treat output as a demo.</li>
+<li><b>Web UI not browser-verified</b>; verified only via HTTP requests. Stepper is cosmetic; each click calls <code>/triage</code> twice (json + markdown).</li>
+<li><b>Redundant file:</b> <code>ui/__init__.py</code> holds an older Streamlit draft; consider deleting it.</li>
+<li><b>docker-compose</b> sets <code>TRIAGEOPS_API_URL</code> for the UI, but the Streamlit app calls the pipeline directly and ignores it.</li>
+<li><b>Dockerfile/CI</b> were written but not executed locally (no Docker build or Actions run observed).</li>
+<li><b>CORS is <code>*</code></b> and the API has no auth or rate limiting — fine for local use, not for public exposure.</li>
+<li>Regex secret/command detection is heuristic; the 400-line trim keeps only the tail of long logs.</li>
+<li>The commit pushed to GitHub (<code>2coolkalamkaar/TriageOps</code>) predates this document; commit <code>docs/</code> to publish it.</li>
+</ul>
+</section>
+
+</main>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+mermaid.initialize({startOnLoad:true,theme:'dark',securityLevel:'loose',themeVariables:{primaryColor:'#131d31',primaryBorderColor:'#38bdf8',primaryTextColor:'#e2e8f0',lineColor:'#64748b',secondaryColor:'#1a2742',tertiaryColor:'#0f1728',fontFamily:'Inter'}});
+const links=[...document.querySelectorAll('nav a')];
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id))}}),{rootMargin:'-20% 0px -70% 0px'});
+document.querySelectorAll('section').forEach(s=>io.observe(s));
+</script>
+</body>
+</html>

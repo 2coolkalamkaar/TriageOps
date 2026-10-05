@@ -24,12 +24,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-_MODEL_NAME = os.environ.get("TRIAGEOPS_MODEL", "gemini-2.0-flash")
+_PROJECT = (
+    os.environ.get("VERTEX_PROJECT")
+    or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    or "project-036ddc82-f451-4fae-9e3"
+)
+_LOCATION = (
+    os.environ.get("VERTEX_LOCATION")
+    or os.environ.get("GOOGLE_CLOUD_LOCATION")
+    or "us-central1"
+)
+_MODEL_NAME = (
+    os.environ.get("VERTEX_MODEL")
+    or os.environ.get("TRIAGEOPS_MODEL")
+    or "gemini-2.5-flash"
+)
 
 _genai_client = None
-_vertex_initialized = False
+_vertex_client = None
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -40,7 +52,8 @@ def _get_provider() -> str:
         return "offline"
     if os.environ.get("GEMINI_API_KEY"):
         return "gemini_api"
-    if os.environ.get("GOOGLE_CLOUD_PROJECT"):
+    # Vertex AI enabled via project or default GCP environment
+    if os.environ.get("VERTEX_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT") or _PROJECT:
         return "vertex_ai"
     return "offline"
 
@@ -65,53 +78,36 @@ def _call_gemini_api(system_prompt: str, user_message: str) -> str:
         ),
     )
     latency = int((time.monotonic() - start) * 1000)
-    logger.debug("Gemini API call completed in %d ms", latency)
+    logger.info("Gemini API call completed in %d ms", latency)
     return response.text or "{}"
 
 
 def _call_vertex_ai(system_prompt: str, user_message: str) -> str:
-    global _vertex_initialized
-    import vertexai
-    from vertexai.generative_models import (
-        GenerationConfig,
-        GenerativeModel,
-        HarmBlockThreshold,
-        HarmCategory,
-        Part,
-    )
+    global _vertex_client
+    from google import genai
+    from google.genai import types
 
-    if not _vertex_initialized:
-        vertexai.init(project=_PROJECT, location=_LOCATION)
-        _vertex_initialized = True
-
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-    }
-
-    model = GenerativeModel(
-        model_name=_MODEL_NAME,
-        system_instruction=system_prompt,
-        safety_settings=safety_settings,
-    )
-
-    generation_config = GenerationConfig(
-        temperature=0.1,
-        top_p=0.9,
-        max_output_tokens=4096,
-        response_mime_type="application/json",
-    )
+    if _vertex_client is None:
+        _vertex_client = genai.Client(
+            vertexai=True,
+            project=_PROJECT,
+            location=_LOCATION,
+        )
 
     start = time.monotonic()
-    response = model.generate_content(
-        [Part.from_text(user_message)],
-        generation_config=generation_config,
+    response = _vertex_client.models.generate_content(
+        model=_MODEL_NAME,
+        contents=user_message,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            response_mime_type="application/json",
+            temperature=0.1,
+            max_output_tokens=8192,
+        ),
     )
     latency = int((time.monotonic() - start) * 1000)
-    logger.debug("Vertex AI call completed in %d ms", latency)
-    return response.text
+    logger.info("Vertex AI (%s) call completed in %d ms", _MODEL_NAME, latency)
+    return response.text or "{}"
 
 
 def _offline_classification(user_message: str) -> str:
