@@ -1,0 +1,11 @@
+{
+  "name": "T13 — Mixed Docker-in-K8s exec format error",
+  "description": "arm64 image running on amd64 nodes causing exec format error",
+  "input": "$ kubectl logs api-6f7d9-abc12\nexec /usr/local/bin/node: exec format error\n\n$ docker image inspect registry.example.com/api:1.4 --format '{{.Architecture}}'\narm64\n\n$ kubectl get nodes -o wide   # nodes are linux/amd64",
+  "expect": {
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["arm64", "amd64", "exec format", "architecture"],
+    "must_not_mention": ["kubectl delete namespace"]
+  }
+}

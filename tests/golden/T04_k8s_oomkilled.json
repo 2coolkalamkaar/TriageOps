@@ -1,0 +1,11 @@
+{
+  "name": "T04 — K8s OOMKilled",
+  "description": "Container exceeded its 256Mi memory limit and was OOMKilled",
+  "input": "Last State:  Terminated\n  Reason:    OOMKilled\n  Exit Code: 137\nRestart Count: 9\nLimits:\n  memory: 256Mi",
+  "expect": {
+    "classification.type": "Kubernetes",
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["OOMKilled", "256Mi", "memory", "137"]
+  }
+}

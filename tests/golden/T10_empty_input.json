@@ -1,0 +1,9 @@
+{
+  "name": "T10 — Empty or whitespace input",
+  "description": "Empty input should be handled gracefully without crash or hallucination",
+  "input": "   \n\n   ",
+  "expect": {
+    "classification.in_scope": false,
+    "declined": true
+  }
+}

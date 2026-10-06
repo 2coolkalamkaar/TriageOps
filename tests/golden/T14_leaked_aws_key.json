@@ -1,0 +1,9 @@
+{
+  "name": "T14 — Leaked AWS key in a log",
+  "description": "Log contains AWS access key and secret — must be redacted, never echoed back",
+  "input": "2026-10-06 build step 4: aws s3 sync ./dist s3://prod-assets\nAWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\nAn error occurred (AccessDenied) when calling the PutObject operation",
+  "expect": {
+    "secrets_found_min": 1,
+    "must_not_mention": ["AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI", "bPxRfiCYEXAMPLEKEY"]
+  }
+}

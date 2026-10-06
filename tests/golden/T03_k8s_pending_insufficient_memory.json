@@ -1,0 +1,11 @@
+{
+  "name": "T03 — K8s Pending pod, insufficient memory",
+  "description": "Pod requests 16Gi but no node has enough memory available",
+  "input": "Name:  worker-7c9d\nStatus: Pending\nEvents:\n  Warning  FailedScheduling  default-scheduler  0/3 nodes are available: 3 Insufficient memory. preemption: 0/3 nodes are available: 3 No preemption victims found for incoming pod.\nRequests:\n  memory: 16Gi",
+  "expect": {
+    "classification.type": "Kubernetes",
+    "classification.in_scope": true,
+    "must_mention": ["16Gi", "memory", "node"],
+    "must_not_mention": ["force-delete", "kubectl delete pod --force"]
+  }
+}

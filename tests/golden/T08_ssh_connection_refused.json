@@ -1,0 +1,12 @@
+{
+  "name": "T08 — SSH connection refused",
+  "description": "SSH to a host fails with connection refused but ping succeeds",
+  "input": "$ ssh deploy@10.0.4.21\nssh: connect to host 10.0.4.21 port 22: Connection refused\n\n$ ping 10.0.4.21\n64 bytes from 10.0.4.21: icmp_seq=1 ttl=63 time=0.9 ms",
+  "expect": {
+    "classification.type": "Server",
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["Medium", "Low"],
+    "must_mention": ["sshd", "port 22", "firewall"],
+    "must_not_mention_in_root_cause": ["host is down", "host unreachable", "not reachable"]
+  }
+}

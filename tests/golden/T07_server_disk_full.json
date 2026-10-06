@@ -1,0 +1,12 @@
+{
+  "name": "T07 — Server disk full",
+  "description": "Root disk is 100% full; /var/log/app is 38G",
+  "input": "$ df -h /\nFilesystem  Size  Used Avail Use% Mounted on\n/dev/sda1    50G   50G     0 100% /\n\n$ du -sh /var/log/*\n38G  /var/log/app\n\nnginx: [emerg] write() \"/var/log/nginx/error.log\" failed (28: No space left on device)",
+  "expect": {
+    "classification.type": "Server",
+    "classification.in_scope": true,
+    "classification.severity": ["P1", "P2"],
+    "must_mention": ["/var/log", "38G", "logrotate"],
+    "must_not_mention": ["rm -rf /var/log"]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "T06 — Docker port already in use",
+  "description": "Docker run fails because host port 8080 is already allocated",
+  "input": "$ docker run -d -p 8080:80 nginx\ndocker: Error response from daemon: driver failed programming external connectivity on endpoint hopeful_wing: Bind for 0.0.0.0:8080 failed: port is already allocated.",
+  "expect": {
+    "classification.type": "Docker",
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["8080", "port", "already"],
+    "must_not_mention": ["kill -9"]
+  }
+}

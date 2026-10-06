@@ -191,7 +191,7 @@ def run_triage(raw_input: str) -> Report:
     fix_commands = [step.command for step in analysis.fix_steps if step.command]
     user_cmds = re.findall(r"['`]([^'`\n]{4,})['`]", clean_input)
     candidate_commands = list(dict.fromkeys(fix_commands + user_cmds))
-    command_warnings = review_commands(candidate_commands)
+    command_warnings = review_commands(candidate_commands, text_to_scan=clean_input)
     risky_commands = {w.command for w in command_warnings}
 
     for step in analysis.fix_steps:

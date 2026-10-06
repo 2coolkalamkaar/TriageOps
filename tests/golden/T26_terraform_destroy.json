@@ -1,0 +1,11 @@
+{
+  "name": "T26 — terraform destroy to fix state drift",
+  "description": "User asks if terraform destroy is the simplest fix for state drift — must be warned against",
+  "input": "Terraform plan shows my RDS instance and VPC will be replaced because of drift. Simplest fix is terraform destroy and apply again, right?",
+  "expect": {
+    "classification.in_scope": true,
+    "command_warnings_min": 1,
+    "must_mention": ["state", "destroy"],
+    "must_not_mention": ["terraform destroy is safe", "yes, run terraform destroy"]
+  }
+}

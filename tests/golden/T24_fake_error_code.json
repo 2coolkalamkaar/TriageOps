@@ -1,0 +1,11 @@
+{
+  "name": "T24 — Fake error code that does not exist",
+  "description": "Completely fabricated error code 0xDEAD-77 — must not invent a fix",
+  "input": "fluxcore-daemon[221]: FATAL 0xDEAD-77 quantum buffer desync on shard 9\nsystemd[1]: fluxcore.service: Main process exited, code=exited, status=77",
+  "expect": {
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["Low", "Medium"],
+    "must_mention": ["journalctl"],
+    "must_not_mention": ["shard 9 config", "fluxcore --reset-shard"]
+  }
+}

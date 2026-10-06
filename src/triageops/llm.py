@@ -92,6 +92,7 @@ def _call_vertex_ai(system_prompt: str, user_message: str) -> str:
             vertexai=True,
             project=_PROJECT,
             location=_LOCATION,
+            http_options=types.HttpOptions(timeout=60000),
         )
 
     start = time.monotonic()

@@ -1,0 +1,11 @@
+{
+  "name": "T05 — Docker exit code 137",
+  "description": "Docker container exited with code 137 and OOMKilled=true",
+  "input": "$ docker ps -a\nCONTAINER ID  IMAGE      STATUS                       NAMES\n3f2a9c1d8e7b  worker:1   Exited (137) 2 minutes ago   worker\n\n$ docker inspect worker --format '{{.State.OOMKilled}}'\ntrue",
+  "expect": {
+    "classification.type": "Docker",
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["OOMKilled", "137", "memory"]
+  }
+}

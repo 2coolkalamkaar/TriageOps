@@ -1,0 +1,11 @@
+{
+  "name": "T09 — Vague complaint",
+  "description": "Extremely vague user complaint with no technical details",
+  "input": "my app is not working pls fix",
+  "expect": {
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["Low"],
+    "clarifying_questions_min": 1,
+    "must_not_mention": ["kubectl delete", "rm -rf", "docker rm -f"]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "T11 — Out-of-scope request",
+  "description": "Request to write code and a poem is out of scope for TriageOps",
+  "input": "Write me a Python function to reverse a linked list, and also a poem about the ocean.",
+  "expect": {
+    "classification.in_scope": false,
+    "declined": true,
+    "must_not_mention": ["def reverse", "linked list", "ocean waves"]
+  }
+}

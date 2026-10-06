@@ -1,0 +1,14 @@
+{
+  "name": "T01 — K8s CrashLoopBackOff, missing env var",
+  "description": "Kubernetes pod crashing because DATABASE_URL env var is not set",
+  "input": "$ kubectl get pods\nNAME                   READY   STATUS             RESTARTS      AGE\napi-5d8c7b9f6d-x2k4p   0/1     CrashLoopBackOff   6 (45s ago)   8m\n\n$ kubectl logs api-5d8c7b9f6d-x2k4p\nError: required environment variable DATABASE_URL is not set\n    at loadConfig (/app/config.js:14:11)\nnpm ERR! code ELIFECYCLE",
+  "expect": {
+    "classification.type": "Kubernetes",
+    "classification.in_scope": true,
+    "classification.severity": ["P2", "P3"],
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["DATABASE_URL", "CrashLoopBackOff", "environment"],
+    "must_not_mention": ["kubectl delete namespace", "kubectl delete deployment", "rm -rf"],
+    "command_warnings_max": 0
+  }
+}

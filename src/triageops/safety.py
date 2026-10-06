@@ -114,6 +114,57 @@ RISKY_COMMANDS: list[tuple[str, str, str]] = [
         "Stops a critical system service",
         "Use `systemctl status <service>` and investigate logs before stopping",
     ),
+    # --- Additional patterns from test suite section 8 ---
+    (
+        r"rm\s+-[a-z]*r[a-z]*f?\s+/([\s$]|$)|--no-preserve-root",
+        "Deletes the entire filesystem — catastrophic and irreversible",
+        "Use `du -sh` to find large directories and remove only specific safe targets",
+    ),
+    (
+        r"kubectl\s+delete\s+.*--all\b|kubectl\s+delete\s+all\b",
+        "Deletes all resources in scope — blast radius may include prod workloads",
+        "Scope the delete to a single resource type and namespace; use --dry-run=server first",
+    ),
+    (
+        r"--all-namespaces.*delete|delete.*--all-namespaces|-A\s+.*delete",
+        "Cluster-wide delete — can wipe kube-system and all namespaces",
+        "Restrict to a single namespace; take a backup or use a staging cluster first",
+    ),
+    (
+        r"docker\s+volume\s+prune",
+        "Permanently deletes unused Docker volumes — can remove database data",
+        "Run `docker volume ls` to audit volumes; back up important data before pruning",
+    ),
+    (
+        r"(?i)\bflush(all|db)\b",
+        "Deletes all Redis data (and replicates to replicas)",
+        "Set an eviction policy (e.g. allkeys-lru), raise maxmemory, or expire unused keys",
+    ),
+    (
+        r"terraform\s+destroy|-auto-approve",
+        "Destroys real cloud infrastructure — databases and networks cannot be trivially recovered",
+        "Review `terraform plan` carefully; use `terraform state` and lifecycle rules; snapshot first",
+    ),
+    (
+        r"setenforce\s+0|ufw\s+disable|iptables\s+-F|systemctl\s+(stop|disable)\s+(firewalld|ufw)",
+        "Disables security controls — leaves the system exposed",
+        "Fix the specific permission or port instead of disabling the entire security layer",
+    ),
+    (
+        r"history\s+-c|shred\s+|>\s*/var/log/|truncate\s+.*audit|delete\s+.*audit|wipe\s+.*audit|clear\s+.*audit",
+        "Can destroy audit evidence or shell history — anti-forensics",
+        "Report the incident honestly; revert the change; write an incident note instead",
+    ),
+    (
+        r"(?i)truncate\s+table|delete\s+from\s+\w+\s*;?\s*$",
+        "Destroys database table data",
+        "Use a WHERE clause to limit scope; take a backup first; use a transaction with rollback",
+    ),
+    (
+        r"git\s+push\s+.*--force|git\s+reset\s+--hard",
+        "Can destroy Git history or uncommitted work",
+        "Use `git push --force-with-lease` or create a backup branch before resetting",
+    ),
 ]
 
 
@@ -152,9 +203,9 @@ def redact_secrets(text: str) -> tuple[str, list[str]]:
     return out, found
 
 
-def review_commands(commands: list[str]) -> list[CommandWarning]:
+def review_commands(commands: list[str], text_to_scan: str = "") -> list[CommandWarning]:
     """
-    Check a list of commands against risky patterns.
+    Check a list of commands and optionally raw input text against risky patterns.
 
     Returns a list of CommandWarning objects for any matches found.
     This runs AFTER the LLM produces fix steps — code overrides model risk labels.
@@ -172,6 +223,18 @@ def review_commands(commands: list[str]) -> list[CommandWarning]:
                     CommandWarning(command=cmd, reason=reason, safer_alternative=safer)
                 )
                 seen.add(key)
+
+    if text_to_scan:
+        for pattern, reason, safer in RISKY_COMMANDS:
+            m = re.search(pattern, text_to_scan, re.IGNORECASE)
+            if m:
+                matched_snippet = m.group(0).strip()
+                key = f"{matched_snippet}::{pattern}"
+                if key not in seen and not any(w.reason == reason for w in warnings):
+                    warnings.append(
+                        CommandWarning(command=matched_snippet, reason=reason, safer_alternative=safer)
+                    )
+                    seen.add(key)
 
     return warnings
 

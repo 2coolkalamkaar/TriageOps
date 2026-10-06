@@ -131,9 +131,19 @@ def evaluate(report, test_case: dict) -> list[tuple[str, bool, str]]:
                 "found" if passed else "NOT found in report",
             ))
 
-    # must_not_mention — check in full markdown render
+    # must_not_mention — check in full markdown render (excluding Safety Warnings section where dangerous commands are legitimately warned against)
     if "must_not_mention" in expect:
-        md = to_markdown(report).lower()
+        md_text = to_markdown(report)
+        if "### ⚠️ Safety Warnings" in md_text:
+            parts = md_text.split("### ⚠️ Safety Warnings")
+            post = parts[1]
+            rest = ""
+            for heading in ["## ❓ Clarifying Questions", "## ✅ Verification", "## 🛡️ Prevention"]:
+                if heading in post:
+                    rest = post[post.index(heading):]
+                    break
+            md_text = parts[0] + rest
+        md = md_text.lower()
         for phrase in expect["must_not_mention"]:
             passed = phrase.lower() not in md
             results.append((
@@ -151,6 +161,17 @@ def evaluate(report, test_case: dict) -> list[tuple[str, bool, str]]:
                 f"root_cause_not_mention[{phrase!r}]",
                 passed,
                 "not found (good)" if passed else "FOUND in root_cause (bad)",
+            ))
+
+    # must_not_suggest — verify dangerous commands are not in recommended fix steps
+    if "must_not_suggest" in expect:
+        fix_cmds = " ".join((step.command or "").lower() for step in analysis.fix_steps)
+        for phrase in expect["must_not_suggest"]:
+            passed = phrase.lower() not in fix_cmds
+            results.append((
+                f"must_not_suggest[{phrase!r}]",
+                passed,
+                "not suggested in fix steps (good)" if passed else "SUGGESTED in fix steps (bad)",
             ))
 
     # must_mention_security — check in security notes section
@@ -193,7 +214,7 @@ def evaluate(report, test_case: dict) -> list[tuple[str, bool, str]]:
 # Runner
 # ---------------------------------------------------------------------------
 
-def run_golden_tests(golden_dir: Path, case_filter: str | None, verbose: bool) -> int:
+def run_golden_tests(golden_dir: Path, case_filter: str | None, verbose: bool, delay: int = 5) -> int:
     """Run all golden tests and return exit code (0=all pass, 1=failures)."""
     cases = sorted(golden_dir.glob("*.json"))
     if not cases:
@@ -212,7 +233,7 @@ def run_golden_tests(golden_dir: Path, case_filter: str | None, verbose: bool) -
 
     print(f"\n{'='*60}")
     print("  TriageOps Golden Test Suite")
-    print(f"  Running {len(cases)} case(s)")
+    print(f"  Running {len(cases)} case(s)  [inter-case delay: {delay}s]")
     print(f"{'='*60}\n")
 
     for case_path in cases:
@@ -256,6 +277,10 @@ def run_golden_tests(golden_dir: Path, case_filter: str | None, verbose: bool) -
                 print(f"  {line}")
             print("  ...\n")
 
+        if delay > 0:
+            print(f"  ⏱  Waiting {delay}s before next case...\n")
+            time.sleep(delay)
+
     # Summary
     print(f"{'='*60}")
     print(f"  Results: {passed_rules}/{total_rules} rules passed")
@@ -272,10 +297,11 @@ def main():
     parser = argparse.ArgumentParser(description="Run TriageOps golden test suite")
     parser.add_argument("--case", help="Filter by case name substring")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show report excerpts")
+    parser.add_argument("--delay", type=int, default=5, help="Seconds to wait between cases (default: 5)")
     args = parser.parse_args()
 
     golden_dir = Path(__file__).parent / "golden"
-    sys.exit(run_golden_tests(golden_dir, args.case, args.verbose))
+    sys.exit(run_golden_tests(golden_dir, args.case, args.verbose, delay=args.delay))
 
 
 if __name__ == "__main__":

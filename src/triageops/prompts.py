@@ -37,8 +37,9 @@ CLASSIFICATION RULES
   - P4 → Minor or cosmetic: low impact, no user-facing harm.
 
 - in_scope:
-  - true  → The text is about servers, Docker, or Kubernetes infrastructure.
-             Also true if the text is too vague to tell but MIGHT be infrastructure.
+  - true  → The text is about servers, Docker, Kubernetes, or cloud/IaC infrastructure
+            (Terraform, VPC, RDS, databases, cloud networking).
+            Also true if the text is too vague to tell but MIGHT be infrastructure.
   - false → Clearly about something else (application business logic, billing, UI bugs,
              writing poems, etc.)
 

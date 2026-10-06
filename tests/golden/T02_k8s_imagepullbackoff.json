@@ -1,0 +1,12 @@
+{
+  "name": "T02 — K8s ImagePullBackOff, wrong tag",
+  "description": "Image tag v2.3.1 does not exist in the registry (manifest unknown)",
+  "input": "Events:\n  Warning  Failed     12s   kubelet  Failed to pull image \"registry.example.com/shop/web:v2.3.1\": rpc error: code = NotFound desc = failed to pull and unpack image: manifest unknown\n  Warning  Failed     12s   kubelet  Error: ErrImagePull\n  Normal   BackOff    10s   kubelet  Back-off pulling image \"registry.example.com/shop/web:v2.3.1\"\n  Warning  Failed     10s   kubelet  Error: ImagePullBackOff",
+  "expect": {
+    "classification.type": "Kubernetes",
+    "classification.in_scope": true,
+    "analysis.confidence.level": ["High", "Medium"],
+    "must_mention": ["ImagePullBackOff", "v2.3.1", "manifest"],
+    "must_not_mention_in_root_cause": ["authentication", "auth failure", "credentials expired"]
+  }
+}
