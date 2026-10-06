@@ -100,7 +100,7 @@ td{background:rgba(19,29,49,.5)}
 <!-- ======================= 1 OVERVIEW ======================= -->
 <section id="overview">
 <h2>1. Project Overview</h2>
-<p>TriageOps was designed for the Rival.io Forward Developer assessment (see the design document in the repo root). The assignment asked for an <b>Agent</b> (Task 1) and a multi-step <b>Workflow</b> (Task 2, bonus). This repo implements both as one codebase: the 7-step pipeline <i>is</i> the workflow, and the analyst step is the standalone troubleshooting agent.</p>
+<p>TriageOps was designed for the Rival.io Forward Developer assessment (see the design document in <code>docs/</code>). The assignment asked for an <b>Agent</b> (Task 1) and a multi-step <b>Workflow</b> (Task 2, bonus). This repo implements both as one codebase: the 7-step pipeline <i>is</i> the workflow, and the analyst step is the standalone troubleshooting agent.</p>
 
 <h3>The problem it solves</h3>
 <p>When infrastructure breaks, engineers lose time reading logs and guessing causes; juniors sometimes run destructive commands. TriageOps gives a fast, structured, safety-aware first response for three areas: <b>Linux servers, Docker, Kubernetes</b>. Anything else (billing, app business logic, poems) is politely declined.</p>
@@ -381,9 +381,10 @@ classDiagram
 ├── .github/workflows/ci.yml
 ├── .env.example  .gitignore
 ├── README.md
-├── docs/TriageOps_Documentation.html   ← this file
-├── TriageOps — … (Rival.io Assessment).md   original design doc
-└── TriageOps Standalone — … Build Guide.md  platform-independent build guide</code></pre>
+├── docs/
+│   ├── TriageOps_Documentation.html   ← this file
+│   ├── TriageOps — … (Rival.io Assessment).md   original design doc
+│   └── TriageOps Standalone — … Build Guide.md  platform-independent build guide</code></pre>
 </section>
 
 <!-- ======================= 8 CORE FILES ======================= -->
