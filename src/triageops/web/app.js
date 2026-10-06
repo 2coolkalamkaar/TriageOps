@@ -454,18 +454,11 @@ Events:
       }, 300);
 
       // Call API
-      const [jsonRes, mdRes] = await Promise.all([
-        fetch("/triage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, format: "json" })
-        }),
-        fetch("/triage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, format: "markdown" })
-        })
-      ]);
+      const jsonRes = await fetch("/triage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, format: "json" })
+      });
 
       if (!jsonRes.ok) {
         const err = await jsonRes.json();
@@ -473,10 +466,8 @@ Events:
       }
 
       const jsonData = await jsonRes.json();
-      const mdData = await mdRes.json();
-
       const report = jsonData.data;
-      const mdString = mdData.data;
+      const mdString = jsonData.markdown || "";
 
       // Step 4 complete
       step3.classList.remove("active");

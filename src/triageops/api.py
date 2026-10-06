@@ -86,6 +86,7 @@ class TriageResponse(BaseModel):
     success: bool
     format: str
     data: Any  # Report dict (json) or markdown string
+    markdown: str | None = None
     latency_ms: int | None = None
 
 
@@ -181,11 +182,13 @@ async def triage(body: TriageRequest) -> TriageResponse:
         logger.exception("Pipeline error")
         raise HTTPException(status_code=500, detail=str(exc))
 
+    md = to_markdown(report)
     if body.format == "markdown":
         return TriageResponse(
             success=True,
             format="markdown",
-            data=to_markdown(report),
+            data=md,
+            markdown=md,
             latency_ms=report.latency_ms,
         )
 
@@ -193,6 +196,7 @@ async def triage(body: TriageRequest) -> TriageResponse:
         success=True,
         format="json",
         data=report.model_dump(),
+        markdown=md,
         latency_ms=report.latency_ms,
     )
 
