@@ -32,12 +32,12 @@ _PROJECT = (
 _LOCATION = (
     os.environ.get("VERTEX_LOCATION")
     or os.environ.get("GOOGLE_CLOUD_LOCATION")
-    or "us-central1"
+    or "global"
 )
 _MODEL_NAME = (
     os.environ.get("VERTEX_MODEL")
     or os.environ.get("TRIAGEOPS_MODEL")
-    or "gemini-2.5-flash"
+    or "gemini-3.8-flash"
 )
 
 _genai_client = None
