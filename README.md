@@ -10,6 +10,9 @@
 
 ---
 
+https://github.com/user-attachments/assets/5cc9e281-6662-476d-ba64-af8b542a973d
+
+
 ## ⚡ What is TriageOps at a Glance?
 
 When production breaks at 3 AM, engineers often paste messy terminal outputs or sensitive logs into public chatbots or fumble through endless wikis. **TriageOps** bridges the gap between chaotic production telemetry and rapid incident resolution:
