@@ -454,15 +454,17 @@ Events:
       }, 300);
 
       // Call API
-      const jsonRes = await fetch("/triage", {
+      const jsonRes = await apiFetch("/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, format: "json" })
       });
 
       if (!jsonRes.ok) {
-        const err = await jsonRes.json();
-        throw new Error(err.detail || "Triage pipeline execution failed");
+        const err = await jsonRes.json().catch(() => ({}));
+        const detail = typeof err.detail === "string" ? err.detail : null;
+        if (jsonRes.status === 429) throw new Error("Rate limit exceeded — wait a minute and retry");
+        throw new Error(detail || `Triage failed (HTTP ${jsonRes.status})`);
       }
 
       const jsonData = await jsonRes.json();
@@ -494,7 +496,11 @@ Events:
         tabMarkdown.classList.remove("active");
         tabJson.classList.remove("active");
 
-        showToast("Triage dossier generated successfully", "success");
+        if (report.degraded) {
+          showToast("DEGRADED MODE: offline heuristic, not an LLM diagnosis", "error");
+        } else {
+          showToast("Triage dossier generated successfully", "success");
+        }
       }, 200);
 
     } catch (err) {
@@ -749,7 +755,7 @@ Events:
       runbooks.forEach(rb => {
         const chip = document.createElement("div");
         chip.className = "runbook-chip";
-        chip.innerHTML = `<span>📖</span> <span>${rb}</span>`;
+        chip.innerHTML = `<span>📖</span> <span>${escapeHtml(rb)}</span>`;
         chip.addEventListener("click", () => openRunbookDrawer(rb));
         matchedRunbooksList.appendChild(chip);
       });
@@ -773,7 +779,7 @@ Events:
     runbookDrawer.classList.add("open");
 
     try {
-      const res = await fetch(`/runbooks/${encodeURIComponent(runbookName)}`);
+      const res = await apiFetch(`/runbooks/${encodeURIComponent(runbookName)}`);
       if (!res.ok) throw new Error("Runbook not found");
       const data = await res.json();
       drawerContent.innerHTML = renderSimpleMarkdown(data.content);
@@ -792,7 +798,7 @@ Events:
     drawerContent.innerHTML = `<p>Loading available runbooks...</p>`;
 
     try {
-      const res = await fetch("/runbooks");
+      const res = await apiFetch("/runbooks");
       const data = await res.json();
       let html = `<h3>Loaded Runbooks (${data.count})</h3><ul>`;
       data.runbooks.forEach(rb => {
@@ -877,7 +883,7 @@ Events:
 
   async function fetchRunbooksMeta() {
     try {
-      const res = await fetch("/runbooks");
+      const res = await apiFetch("/runbooks");
       if (res.ok) {
         const data = await res.json();
         runbookCountBadge.textContent = `${data.count} Runbooks`;
@@ -953,6 +959,36 @@ Events:
       case "server": return "💾";
       default: return "🖥️";
     }
+  }
+
+  // Authenticated fetch: sends the stored API key; on 401 asks for one and retries once.
+  const API_KEY_STORAGE = "triageops_api_key";
+
+  function getStoredApiKey() {
+    try { return localStorage.getItem(API_KEY_STORAGE) || ""; } catch { return ""; }
+  }
+
+  function setStoredApiKey(key) {
+    try {
+      if (key) localStorage.setItem(API_KEY_STORAGE, key);
+      else localStorage.removeItem(API_KEY_STORAGE);
+    } catch { /* storage unavailable — key lives for this request only */ }
+  }
+
+  async function apiFetch(url, opts = {}, retried = false, keyOverride = null) {
+    const key = keyOverride ?? getStoredApiKey();
+    const headers = { ...(opts.headers || {}) };
+    if (key) headers["X-API-Key"] = key;
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401 && !retried) {
+      const entered = window.prompt("This TriageOps server requires an API key:");
+      if (entered) {
+        setStoredApiKey(entered.trim());
+        return apiFetch(url, opts, true, entered.trim());
+      }
+    }
+    if (res.status === 401) setStoredApiKey("");
+    return res;
   }
 
   function escapeHtml(str) {

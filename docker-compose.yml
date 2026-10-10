@@ -1,13 +1,22 @@
+x-triageops-env: &triageops-env
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+  GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+  TRIAGEOPS_MODEL: ${TRIAGEOPS_MODEL:-gemini-3.8-flash}
+  TRIAGEOPS_ALLOW_OFFLINE_FALLBACK: ${TRIAGEOPS_ALLOW_OFFLINE_FALLBACK:-0}
+  TRIAGEOPS_FORCE_OFFLINE: ${TRIAGEOPS_FORCE_OFFLINE:-0}
+  TRIAGEOPS_LOG_LEVEL: ${TRIAGEOPS_LOG_LEVEL:-INFO}
+
 services:
   api:
     build: .
     ports:
       - "8000:8000"
     environment:
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
-      - TRIAGEOPS_MODEL=${TRIAGEOPS_MODEL:-gemini-2.0-flash}
-      - TRIAGEOPS_LOG_LEVEL=INFO
+      <<: *triageops-env
+      TRIAGEOPS_API_KEYS: ${TRIAGEOPS_API_KEYS:-}
+      TRIAGEOPS_CORS_ORIGINS: ${TRIAGEOPS_CORS_ORIGINS:-}
+      TRIAGEOPS_RATE_LIMIT_PER_MIN: ${TRIAGEOPS_RATE_LIMIT_PER_MIN:-20}
     volumes:
       - ./runbooks:/app/runbooks:ro
       # Mount GCP credentials if using a service account file
@@ -23,12 +32,12 @@ services:
     build: .
     command: ["streamlit", "run", "src/triageops/ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
     ports:
-      - "8501:8501"
+      # Streamlit runs the pipeline in-process and has no auth of its own:
+      # bound to localhost only. Put it behind an authenticating proxy before exposing it.
+      - "127.0.0.1:8501:8501"
     environment:
-      - TRIAGEOPS_API_URL=http://api:8000
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
-      - TRIAGEOPS_MODEL=${TRIAGEOPS_MODEL:-gemini-2.0-flash}
+      <<: *triageops-env
+      TRIAGEOPS_API_URL: http://api:8000
     depends_on:
       api:
         condition: service_healthy

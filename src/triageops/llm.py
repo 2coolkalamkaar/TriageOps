@@ -3,9 +3,16 @@ LLM wrapper with structured JSON output, dual-provider support (Gemini API & Ver
 and high-fidelity offline fallback for local development and UI demos.
 
 Priority order:
-1. GEMINI_API_KEY environment variable -> Google GenAI SDK (direct API key)
-2. GOOGLE_CLOUD_PROJECT environment variable -> Google Cloud Vertex AI SDK
-3. Fallback -> Offline heuristic triage engine grounded in the 10 DevOps runbooks
+1. TRIAGEOPS_FORCE_OFFLINE=1 -> Offline heuristic engine (demo mode)
+2. GEMINI_API_KEY environment variable -> Google GenAI SDK (direct API key)
+3. VERTEX_PROJECT / GOOGLE_CLOUD_PROJECT -> Google Cloud Vertex AI SDK
+4. Nothing configured -> Offline heuristic engine (demo mode, logged loudly)
+
+The offline engine is a keyword heuristic, not a diagnosis. Whenever it serves
+a response, the engine is recorded (see track_engines) so the pipeline can
+mark the report as degraded. If a configured LLM call fails, we raise
+LLMUnavailableError instead of silently substituting canned output — unless
+TRIAGEOPS_ALLOW_OFFLINE_FALLBACK=1 is set explicitly.
 """
 
 import json
@@ -13,21 +20,30 @@ import logging
 import os
 import re
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
 
+
+class LLMUnavailableError(RuntimeError):
+    """The configured LLM provider failed and offline fallback is disabled."""
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-_GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+_TRUTHY = ("1", "true", "yes")
+
 _PROJECT = (
     os.environ.get("VERTEX_PROJECT")
     or os.environ.get("GOOGLE_CLOUD_PROJECT")
-    or "project-036ddc82-f451-4fae-9e3"
+    or ""
 )
 _LOCATION = (
     os.environ.get("VERTEX_LOCATION")
@@ -45,17 +61,45 @@ _vertex_client = None
 
 T = TypeVar("T", bound=BaseModel)
 
+# Engines that served LLM calls in the current pipeline run (see track_engines)
+_engines_used: ContextVar[list[str] | None] = ContextVar("triageops_engines_used", default=None)
+
+
+@contextmanager
+def track_engines() -> Iterator[list[str]]:
+    """Collect the engine name of every model call made inside this block."""
+    used: list[str] = []
+    token = _engines_used.set(used)
+    try:
+        yield used
+    finally:
+        _engines_used.reset(token)
+
+
+def _record_engine(engine: str) -> None:
+    used = _engines_used.get()
+    if used is not None:
+        used.append(engine)
+
+
+def _offline_fallback_allowed() -> bool:
+    return os.environ.get("TRIAGEOPS_ALLOW_OFFLINE_FALLBACK", "").lower() in _TRUTHY
+
 
 def _get_provider() -> str:
     """Determine available LLM provider."""
-    if os.environ.get("TRIAGEOPS_FORCE_OFFLINE", "").lower() in ("1", "true", "yes"):
+    if os.environ.get("TRIAGEOPS_FORCE_OFFLINE", "").lower() in _TRUTHY:
         return "offline"
     if os.environ.get("GEMINI_API_KEY"):
         return "gemini_api"
-    # Vertex AI enabled via project or default GCP environment
-    if os.environ.get("VERTEX_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT") or _PROJECT:
+    if os.environ.get("VERTEX_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT"):
         return "vertex_ai"
     return "offline"
+
+
+def get_provider() -> str:
+    """Public accessor for the configured provider (used by /health)."""
+    return _get_provider()
 
 
 def _call_gemini_api(system_prompt: str, user_message: str) -> str:
@@ -90,7 +134,7 @@ def _call_vertex_ai(system_prompt: str, user_message: str) -> str:
     if _vertex_client is None:
         _vertex_client = genai.Client(
             vertexai=True,
-            project=_PROJECT,
+            project=_PROJECT or os.environ.get("VERTEX_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT"),
             location=_LOCATION,
             http_options=types.HttpOptions(timeout=60000),
         )
@@ -142,7 +186,7 @@ def _offline_classification(user_message: str) -> str:
             "type": "Kubernetes",
             "severity": "P2",
             "in_scope": True,
-            "key_error_lines": lines[:3] or ["Pod status indicates failure"],
+            "key_error_lines": lines[:3],
             "reason": "Kubernetes pod workload termination or scheduling issue identified."
         })
 
@@ -154,7 +198,7 @@ def _offline_classification(user_message: str) -> str:
             "type": "Docker",
             "severity": "P2",
             "in_scope": True,
-            "key_error_lines": lines[:3] or ["Container terminated abnormally"],
+            "key_error_lines": lines[:3],
             "reason": "Docker container lifecycle or resource constraint failure identified."
         })
 
@@ -166,7 +210,7 @@ def _offline_classification(user_message: str) -> str:
             "type": "Server",
             "severity": "P2",
             "in_scope": True,
-            "key_error_lines": lines[:3] or ["Server filesystem or system service failure"],
+            "key_error_lines": lines[:3],
             "reason": "Linux server filesystem exhaustion or system service error identified."
         })
 
@@ -225,30 +269,30 @@ def _offline_analysis(user_message: str) -> str:
     if "oomkilled" in lower or "137" in lower or "out of memory" in lower:
         return json.dumps({
             "summary": "Docker container terminated due to memory exhaustion (OOMKilled with exit code 137).",
-            "root_cause": "Container memory consumption exceeded the allocated threshold (512MiB), causing the Linux kernel OOM killer to terminate process 24601 with exit code 137.",
-            "evidence": ["OOMKilled: true", "ExitCode: 137", "Out of memory: Kill process 24601 (python3)"],
-            "other_causes": ["Application memory leak in python3 workload", "Sudden spike in concurrent traffic"],
+            "root_cause": "Container memory consumption likely exceeded its configured limit, causing the kernel OOM killer to terminate the process (exit code 137).",
+            "evidence": [],
+            "other_causes": ["Application memory leak", "Sudden spike in concurrent traffic"],
             "fix_steps": [
                 {
                     "step": "Inspect container memory limits",
-                    "command": "docker inspect api-container --format '{{.HostConfig.Memory}}'",
+                    "command": "docker inspect <container> --format '{{.HostConfig.Memory}}'",
                     "why": "Confirm configured memory limit in bytes",
                     "risk": "low"
                 },
                 {
                     "step": "Update container memory allocation",
-                    "command": "docker update --memory 1024m --memory-swap 1024m api-container",
+                    "command": "docker update --memory <new-limit> --memory-swap <new-limit> <container>",
                     "why": "Provides immediate memory headroom to prevent OOM termination",
-                    "risk": "low"
+                    "risk": "medium"
                 },
                 {
                     "step": "Verify active container memory consumption",
-                    "command": "docker stats api-container --no-stream",
+                    "command": "docker stats <container> --no-stream",
                     "why": "Monitor memory utilization under regular operation",
                     "risk": "low"
                 }
             ],
-            "verification": ["docker ps --filter name=api-container && docker stats api-container --no-stream"],
+            "verification": ["docker ps --filter name=<container> && docker stats <container> --no-stream"],
             "prevention": [
                 "Profile application memory utilization to identify memory leaks.",
                 "Establish container memory alerts at 80% capacity.",
@@ -265,9 +309,9 @@ def _offline_analysis(user_message: str) -> str:
     # Disk full / ENOSPC
     if "100%" in lower or "enospc" in lower or "no space left" in lower:
         return json.dumps({
-            "summary": "Server root filesystem (/dev/sda1) is at 100% capacity, resulting in 'No space left on device' write failures.",
-            "root_cause": "Filesystem /dev/sda1 is exhausted (No space left on device) with /var/log/application.log consuming 44G of disk space.",
-            "evidence": ["/dev/sda1 100G 100G 0 100% /", "failed (28: No space left on device)", "44G /var/log/application.log"],
+            "summary": "A filesystem appears to be at full capacity, resulting in 'No space left on device' write failures.",
+            "root_cause": "Filesystem space is exhausted (No space left on device); the largest consumer has not been identified yet.",
+            "evidence": [],
             "other_causes": ["Deleted files still held open by running processes", "Rapidly expanding core dumps"],
             "fix_steps": [
                 {
@@ -277,10 +321,10 @@ def _offline_analysis(user_message: str) -> str:
                     "risk": "low"
                 },
                 {
-                    "step": "Truncate or rotate oversized application log",
-                    "command": "truncate -s 0 /var/log/application.log",
-                    "why": "Immediately reclaims disk space from overgrown application.log",
-                    "risk": "low"
+                    "step": "Force-rotate the oversized log via logrotate",
+                    "command": "logrotate -f /etc/logrotate.d/<app>",
+                    "why": "Reclaims space while keeping a compressed copy of the log for investigation",
+                    "risk": "medium"
                 },
                 {
                     "step": "Vacuum old systemd journal logs",
@@ -306,9 +350,9 @@ def _offline_analysis(user_message: str) -> str:
     # Kubernetes CrashLoopBackOff (Missing env var or general)
     if "crashloopbackoff" in lower or "kubectl" in lower or "pod" in lower:
         missing_var_match = re.search(r'variable\s+([A-Za-z0-9_]+)\s+is not set', user_message, re.IGNORECASE)
-        missing_var = missing_var_match.group(1) if missing_var_match else "MY_DB_URL"
-        pod_name = "worker-6f7d8-xkpqr" if "worker-6f7d8" in user_message else "web-api"
-        ns = "staging" if "staging" in user_message else "production"
+        missing_var = missing_var_match.group(1) if missing_var_match else "<ENV_VAR>"
+        pod_name = "<deployment>"
+        ns = "staging" if "staging" in user_message else "<namespace>"
         return json.dumps({
             "summary": f"Kubernetes pod in namespace {ns} is trapped in CrashLoopBackOff because mandatory environment variable {missing_var} is missing.",
             "root_cause": f"Application initialization in container failed because required environment variable {missing_var} is not configured in the pod deployment specification.",
@@ -327,9 +371,9 @@ def _offline_analysis(user_message: str) -> str:
                 },
                 {
                     "step": f"Configure missing environment variable {missing_var}",
-                    "command": f"kubectl set env deployment/{pod_name} -n {ns} {missing_var}=postgres://user:pass@db:5432/app",
+                    "command": f"kubectl set env deployment/{pod_name} -n {ns} {missing_var}=<value-from-secret>",
                     "why": "Provides the required configuration value to the container workload",
-                    "risk": "low"
+                    "risk": "medium"
                 },
                 {
                     "step": "Monitor rollout progression",
@@ -380,25 +424,26 @@ def _offline_analysis(user_message: str) -> str:
 def _call_model(system_prompt: str, user_message: str) -> str:
     provider = _get_provider()
 
-    if provider == "gemini_api":
-        try:
-            return _call_gemini_api(system_prompt, user_message)
-        except Exception as exc:
-            logger.warning("Gemini API call failed (%s); falling back to offline engine", exc)
-            return _offline_call(system_prompt, user_message)
+    if provider == "offline":
+        return _offline_call(system_prompt, user_message)
 
-    if provider == "vertex_ai":
-        try:
-            return _call_vertex_ai(system_prompt, user_message)
-        except Exception as exc:
-            logger.warning("Vertex AI call failed (%s); falling back to offline engine", exc)
-            return _offline_call(system_prompt, user_message)
+    call = _call_gemini_api if provider == "gemini_api" else _call_vertex_ai
+    try:
+        raw = call(system_prompt, user_message)
+    except Exception as exc:
+        if not _offline_fallback_allowed():
+            logger.error("%s call failed: %s", provider, exc)
+            raise LLMUnavailableError(f"LLM provider '{provider}' is unavailable") from exc
+        logger.warning("%s call failed (%s); falling back to offline engine (degraded)", provider, exc)
+        return _offline_call(system_prompt, user_message)
 
-    return _offline_call(system_prompt, user_message)
+    _record_engine(provider)
+    return raw
 
 
 def _offline_call(system_prompt: str, user_message: str) -> str:
     """Heuristic offline triage engine matching schemas."""
+    _record_engine("offline")
     if "Classification" in system_prompt or "key_error_lines" in system_prompt:
         return _offline_classification(user_message)
     return _offline_analysis(user_message)
@@ -442,7 +487,9 @@ def complete_json(
 
             return schema.model_validate_json(cleaned)
 
-        except (ValidationError, json.JSONDecodeError, Exception) as exc:
+        except LLMUnavailableError:
+            raise
+        except (ValidationError, json.JSONDecodeError) as exc:
             last_error = exc
             logger.warning(
                 "LLM returned invalid JSON (attempt %d/%d): %s",
@@ -458,12 +505,14 @@ def complete_json(
                     f"Please return corrected JSON that exactly matches the required schema."
                 )
 
-    # Final fallback if all retries failed: call offline heuristic directly
-    try:
-        offline_raw = _offline_call(system_prompt, user_message)
-        return schema.model_validate_json(offline_raw)
-    except Exception:
-        raise ValueError(
-            f"Model did not return valid JSON after {retries + 1} attempt(s). "
-            f"Last error: {last_error}"
-        )
+    # All retries failed. Only substitute the offline heuristic when explicitly allowed.
+    if _offline_fallback_allowed():
+        logger.warning("Falling back to offline engine after invalid model output (degraded)")
+        try:
+            return schema.model_validate_json(_offline_call(system_prompt, user_message))
+        except ValidationError:
+            pass
+    raise ValueError(
+        f"Model did not return valid JSON after {retries + 1} attempt(s). "
+        f"Last error: {last_error}"
+    )

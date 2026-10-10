@@ -82,6 +82,13 @@ def to_markdown(report: Report) -> str:
         lines += cls.key_error_lines
         lines += ["```", ""]
 
+    if report.degraded:
+        lines += [
+            "> ⚠️ **DEGRADED MODE** — this report was produced by the offline keyword heuristic, "
+            "not the LLM. It is a generic checklist, not a diagnosis of your system.",
+            "",
+        ]
+
     # -----------------------------------------------------------------------
     # Declined path
     # -----------------------------------------------------------------------
@@ -232,7 +239,7 @@ def to_markdown(report: Report) -> str:
     if report.latency_ms is not None:
         lines += [
             "---",
-            f"_TriageOps | Pipeline completed in {report.latency_ms}ms_",
+            f"_TriageOps | Engine: {report.engine} | Pipeline completed in {report.latency_ms}ms_",
         ]
 
     return "\n".join(lines)

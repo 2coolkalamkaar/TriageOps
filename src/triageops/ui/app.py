@@ -197,6 +197,12 @@ if run_btn and input_text and input_text.strip():
     m4.metric("Secrets", len(report.secrets_found))
     m5.metric("Time", f"{elapsed_ms}ms")
 
+    if report.degraded:
+        st.warning(
+            "⚠️ **DEGRADED MODE** — produced by the offline keyword heuristic, not the LLM. "
+            "Treat it as a generic checklist, not a diagnosis of your system."
+        )
+
     # Declined
     if report.declined:
         st.warning(f"⛔ **Out of Scope**\n\n{report.decline_message}")

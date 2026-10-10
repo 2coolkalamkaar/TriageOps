@@ -163,3 +163,10 @@ class TestIsRiskyCommand:
 
     def test_empty_string(self):
         assert is_risky_command("") is False
+
+    def test_file_truncation_is_risky(self):
+        assert is_risky_command("truncate -s 0 /var/log/application.log") is True
+        assert is_risky_command(": > /var/log/app.log") is True
+
+    def test_logrotate_is_not_flagged_as_truncation(self):
+        assert is_risky_command("logrotate -f /etc/logrotate.d/app") is False

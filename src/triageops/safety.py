@@ -156,6 +156,11 @@ RISKY_COMMANDS: list[tuple[str, str, str]] = [
         "Report the incident honestly; revert the change; write an incident note instead",
     ),
     (
+        r"\btruncate\s+(-s\s*0|--size[=\s]+0)\b|:\s*>\s*/\S+",
+        "Empties a file in place — its contents are discarded irreversibly",
+        "Use `logrotate -f` to rotate with a retained copy, or archive the file before clearing it",
+    ),
+    (
         r"(?i)truncate\s+table|delete\s+from\s+\w+\s*;?\s*$",
         "Destroys database table data",
         "Use a WHERE clause to limit scope; take a backup first; use a transaction with rollback",

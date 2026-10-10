@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true  # non-blocking for now
 
       - name: Run unit tests (no API key needed)
-        run: pytest tests/test_safety.py tests/test_schemas.py tests/test_pipeline_mock.py -v
+        run: pytest tests/test_safety.py tests/test_schemas.py tests/test_pipeline_mock.py tests/test_api_and_fallback.py -v
 
   docker:
     name: Docker Build

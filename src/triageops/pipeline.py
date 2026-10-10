@@ -21,7 +21,7 @@ import re
 import time
 from pathlib import Path
 
-from .llm import complete_json
+from .llm import complete_json, track_engines
 from .prompts import (
     ANALYST_SYSTEM,
     CLASSIFIER_SYSTEM,
@@ -71,8 +71,42 @@ def run_triage(raw_input: str) -> Report:
         raw_input: Raw log, error message, command output, or problem description.
 
     Returns:
-        A fully populated Report instance.
+        A fully populated Report instance, stamped with the engine that produced it.
+
+    Raises:
+        LLMUnavailableError: the configured LLM failed and offline fallback is disabled.
     """
+    with track_engines() as engines:
+        report = _run_pipeline(raw_input)
+
+    if "offline" in engines:
+        report.engine = "offline"
+        report.degraded = True
+        _mark_degraded(report)
+    elif engines:
+        report.engine = engines[-1]
+    return report
+
+
+def _mark_degraded(report: Report) -> None:
+    """
+    The offline engine is a keyword heuristic. Never let it present itself as a
+    confident diagnosis: cap confidence at Low and only show evidence that was
+    copied verbatim from the input.
+    """
+    analysis = report.analysis
+    if analysis is None:
+        return
+    analysis.evidence = list(report.classification.key_error_lines)
+    analysis.confidence.level = "Low"
+    analysis.confidence.reason = (
+        "DEGRADED MODE: produced by the offline keyword heuristic, not the LLM. "
+        "Treat this as a generic checklist and verify every step against your system."
+    )
+    analysis.summary = f"[DEGRADED — offline heuristic, not an LLM diagnosis] {analysis.summary}"
+
+
+def _run_pipeline(raw_input: str) -> Report:
     pipeline_start = time.monotonic()
 
     # ------------------------------------------------------------------

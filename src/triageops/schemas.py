@@ -155,3 +155,11 @@ class Report(BaseModel):
         default=None,
         description="Total pipeline latency in milliseconds",
     )
+    engine: str = Field(
+        default="none",
+        description="Engine that produced the analysis: gemini_api, vertex_ai, offline, or none (no LLM call)",
+    )
+    degraded: bool = Field(
+        default=False,
+        description="True if any step was served by the offline heuristic engine instead of the LLM",
+    )

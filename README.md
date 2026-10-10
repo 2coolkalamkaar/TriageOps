@@ -141,7 +141,25 @@ export TRIAGEOPS_MODEL=gemini-3.8-flash
 
 # (Optional) Direct Gemini API Key alternative:
 # export GEMINI_API_KEY=your-api-key
+
+# Protect the API (strongly recommended on any reachable server)
+export TRIAGEOPS_API_KEYS="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 ```
+
+#### Production behaviour & security settings
+| Variable | Default | Effect |
+|---|---|---|
+| `TRIAGEOPS_API_KEYS` | _(empty = open)_ | Comma-separated keys. `/triage` and `/runbooks` require `X-API-Key` or `Authorization: Bearer`. `/health` stays public. The web UI prompts for the key. |
+| `TRIAGEOPS_RATE_LIMIT_PER_MIN` | `20` | Per-client (API key or IP) limit on `/triage`; returns `429` + `Retry-After`. In-memory, per worker. |
+| `TRIAGEOPS_CORS_ORIGINS` | _(none)_ | Allowed browser origins. The bundled UI is same-origin and needs none. |
+| `TRIAGEOPS_ALLOW_OFFLINE_FALLBACK` | `0` | When the LLM fails, the API returns `503` instead of a canned answer. Set `1` to fall back to the offline heuristic (demo only). |
+| `TRIAGEOPS_FORCE_OFFLINE` | `0` | Run the offline heuristic only (no LLM). |
+
+Every report includes `engine` (`gemini_api`, `vertex_ai`, `offline`, `none`) and `degraded`. Offline-heuristic reports are always `degraded: true`, capped at **Low** confidence, show only evidence copied verbatim from the input, and display a banner in every UI. Every response carries an `X-Request-ID` header, and error messages reference it instead of exposing internal details.
+
+Behind a reverse proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy-ip>` so rate limiting sees real client IPs.
+
+See [docs/Production Hardening — Critical Fixes.md](docs/Production%20Hardening%20%E2%80%94%20Critical%20Fixes.md) for the full write-up of these changes and how to verify them.
 
 ### 3. Usage Interfaces
 
